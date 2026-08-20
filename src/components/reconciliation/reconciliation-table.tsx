@@ -4,7 +4,9 @@ import { ArrowLeftRight, Sparkles } from "lucide-react";
 import { useActionState, useRef, useState } from "react";
 
 import {
+  acceptSuggestionAction,
   categorizeAction,
+  dismissSuggestionAction,
   type ReconcileState,
 } from "@/app/(app)/empresas/[id]/conciliacao/actions";
 import { FormFeedback } from "@/components/forms/form-feedback";
@@ -26,6 +28,9 @@ export type ReconcileRow = {
   categorizedBy: "RULE" | "AI" | "MANUAL" | "NONE";
   aiConfidence: number | null;
   isTransfer: boolean;
+  /** Palpite da IA abaixo do limiar, aguardando decisao do usuario. */
+  suggestedCategoryId: string | null;
+  suggestedCategoryName: string | null;
 };
 
 const initialState: ReconcileState = {};
@@ -156,6 +161,9 @@ export function ReconciliationTable({
                     row={row}
                     categories={categories}
                   />
+                  {row.suggestedCategoryId && (
+                    <Suggestion companyId={companyId} row={row} />
+                  )}
                 </td>
 
                 <td className="px-3 py-2">
@@ -227,6 +235,60 @@ function RowCategory({
         <span className="text-xs text-destructive">{state.error}</span>
       )}
     </form>
+  );
+}
+
+/**
+ * Sugestao da IA com confianca abaixo do limiar (Secao 5.3).
+ *
+ * Aparece destacada e NAO conta como categorizado: o lancamento segue pendente
+ * ate o usuario aceitar ou descartar.
+ */
+function Suggestion({
+  companyId,
+  row,
+}: {
+  companyId: string;
+  row: ReconcileRow;
+}) {
+  const [acceptState, accept] = useActionState(acceptSuggestionAction, initialState);
+  const [dismissState, dismiss] = useActionState(dismissSuggestionAction, initialState);
+
+  return (
+    <div className="mt-1.5 flex flex-wrap items-center gap-2 rounded-md border border-gold/50 bg-gold/10 px-2 py-1">
+      <Sparkles className="size-3 shrink-0 text-gold" aria-hidden="true" />
+      <span className="text-xs">
+        IA sugere <span className="font-medium">{row.suggestedCategoryName}</span>
+        {row.aiConfidence !== null && (
+          <span className="text-muted-foreground">
+            {" "}
+            ({Math.round(row.aiConfidence * 100)}% de confiança)
+          </span>
+        )}
+      </span>
+
+      <form action={accept} className="ml-auto">
+        <input type="hidden" name="companyId" value={companyId} />
+        <input type="hidden" name="transactionId" value={row.id} />
+        <SubmitButton size="sm" variant="outline" className="h-6 px-2 text-xs" pendingLabel="…">
+          Aceitar
+        </SubmitButton>
+      </form>
+
+      <form action={dismiss}>
+        <input type="hidden" name="companyId" value={companyId} />
+        <input type="hidden" name="transactionId" value={row.id} />
+        <SubmitButton size="sm" variant="ghost" className="h-6 px-2 text-xs" pendingLabel="…">
+          Descartar
+        </SubmitButton>
+      </form>
+
+      {(acceptState.error || dismissState.error) && (
+        <span className="text-xs text-destructive">
+          {acceptState.error ?? dismissState.error}
+        </span>
+      )}
+    </div>
   );
 }
 

@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import Link from "next/link";
 import { ArrowLeft, CheckCircle2 } from "lucide-react";
 
+import { AiCategorizeButton } from "@/components/reconciliation/ai-button";
 import { ApplyRulesButton } from "@/components/reconciliation/apply-rules-button";
 import { ReconciliationFilters } from "@/components/reconciliation/filters";
 import {
@@ -12,6 +13,7 @@ import {
   TransferSuggestions,
   type TransferSuggestion,
 } from "@/components/reconciliation/transfer-suggestions";
+import { isAiEnabled } from "@/lib/ai/client";
 import { assertCompanyInWorkspace, getWorkspaceOrThrow } from "@/lib/auth/workspace";
 import { getWorkspaceCategories, toOptions } from "@/lib/categories/list";
 import { formatAmount, formatDate, formatMonth } from "@/lib/format";
@@ -66,7 +68,10 @@ export default async function ReconciliationPage({
             : {}),
         },
         orderBy: [{ date: "asc" }, { createdAt: "asc" }],
-        include: { account: { select: { nickname: true } } },
+        include: {
+          account: { select: { nickname: true } },
+          aiSuggestedCategory: { select: { name: true } },
+        },
         take: 2000,
       }),
       prisma.transaction.count({ where: { ...inCompany, date: period } }),
@@ -87,6 +92,8 @@ export default async function ReconciliationPage({
     categorizedBy: transaction.categorizedBy,
     aiConfidence: transaction.aiConfidence,
     isTransfer: transaction.transferPairId !== null,
+    suggestedCategoryId: transaction.aiSuggestedCategoryId,
+    suggestedCategoryName: transaction.aiSuggestedCategory?.name ?? null,
   }));
 
   const transferSuggestions: TransferSuggestion[] = suggestions.map((pair) => ({
@@ -124,11 +131,20 @@ export default async function ReconciliationPage({
             </p>
           </div>
 
-          <ApplyRulesButton
-            companyId={company.id}
-            monthKey={monthKey}
-            pendingCount={pendingCount}
-          />
+          <div className="flex flex-wrap items-center gap-3">
+            <ApplyRulesButton
+              companyId={company.id}
+              monthKey={monthKey}
+              pendingCount={pendingCount}
+            />
+            {isAiEnabled() && (
+              <AiCategorizeButton
+                companyId={company.id}
+                monthKey={monthKey}
+                pendingCount={pendingCount}
+              />
+            )}
+          </div>
         </div>
 
         {totalCount > 0 && (

@@ -15,6 +15,10 @@ import { monthEnd, monthStart, parseMonthKey } from "@/lib/period";
 import { prisma } from "@/lib/prisma";
 import { applyRules, validatePattern } from "@/lib/rules/engine";
 import { detectTransferPairs } from "@/lib/transactions/transfers";
+import { categorizeWithAi } from "@/lib/ai/categorize";
+import { isAiEnabled } from "@/lib/ai/client";
+import { CONFIDENCE_THRESHOLD } from "@/lib/ai/prompt";
+import { CATEGORY_GROUP_LABELS } from "@/lib/categories/default-plan";
 import { field, firstIssue, parseId } from "@/lib/validation/schemas";
 
 export type ReconcileState = {
@@ -293,6 +297,173 @@ export async function deleteRuleAction(
 
   revalidatePath("/configuracoes/regras");
   return { success: "Regra removida." };
+}
+
+
+// ---------------------------------------------------------------------------
+// Categorizacao por IA (Secao 5.3, camada 2)
+// ---------------------------------------------------------------------------
+
+/**
+ * Roda a IA sobre o que sobrou depois das regras.
+ *
+ * Nada aqui e caminho obrigatorio: com AI_ENABLED desligado a acao devolve uma
+ * mensagem e a conciliacao manual segue igual (Secao 8.3).
+ */
+export async function categorizeWithAiAction(
+  _prevState: ReconcileState,
+  formData: FormData,
+): Promise<ReconcileState> {
+  const context = await getWorkspaceOrThrow();
+
+  const companyId = parseId(formData, "companyId");
+  if (!companyId.success) return { error: firstIssue(companyId.error) };
+  const company = await assertCompanyInWorkspace(companyId.data, context);
+
+  if (!isAiEnabled()) {
+    return {
+      error:
+        "IA desligada. Defina AI_ENABLED=true e ANTHROPIC_API_KEY no .env para usar a categorização assistida.",
+    };
+  }
+
+  const month = readMonth(formData);
+
+  const [categories, pending] = await Promise.all([
+    getWorkspaceCategories(context),
+    prisma.transaction.findMany({
+      where: {
+        account: { companyId: company.id },
+        categoryId: null,
+        ...(month
+          ? { date: { gte: monthStart(month), lt: monthEnd(month) } }
+          : {}),
+      },
+      select: { id: true, date: true, amountCents: true, description: true },
+      orderBy: [{ date: "asc" }, { createdAt: "asc" }],
+    }),
+  ]);
+
+  if (pending.length === 0) {
+    return { success: "Nada a categorizar: todos os lançamentos já têm categoria." };
+  }
+
+  const run = await categorizeWithAi({
+    workspaceId: context.workspace.id,
+    categories: categories.map((category) => ({
+      id: category.id,
+      name: category.name,
+      groupLabel: CATEGORY_GROUP_LABELS[category.group],
+    })),
+    transactions: pending,
+  });
+
+  const applied = run.suggestions.filter((s) => s.apply);
+  const suggested = run.suggestions.filter((s) => !s.apply);
+
+  await prisma.$transaction([
+    ...applied.map((suggestion) =>
+      prisma.transaction.update({
+        where: { id: suggestion.transactionId },
+        data: {
+          categoryId: suggestion.categoryId,
+          categorizedBy: "AI" as const,
+          aiConfidence: suggestion.confidence,
+          aiSuggestedCategoryId: null,
+        },
+      }),
+    ),
+    // Abaixo do limiar fica como sugestao destacada, e o lancamento continua
+    // pendente: o periodo nao pode fechar com um palpite dentro da DRE.
+    ...suggested.map((suggestion) =>
+      prisma.transaction.update({
+        where: { id: suggestion.transactionId },
+        data: {
+          aiSuggestedCategoryId: suggestion.categoryId,
+          aiConfidence: suggestion.confidence,
+        },
+      }),
+    ),
+  ]);
+
+  revalidateCompany(company.id);
+
+  const partes = [
+    `${applied.length} categorizado(s) pela IA`,
+    suggested.length > 0
+      ? `${suggested.length} com sugestão abaixo de ${Math.round(CONFIDENCE_THRESHOLD * 100)}% para você revisar`
+      : null,
+    run.batchesFailed > 0
+      ? `${run.batchesFailed} lote(s) falharam e ficaram sem categoria`
+      : null,
+    run.skipped > 0
+      ? `${run.skipped} lançamento(s) ficaram para a próxima rodada (limite por clique)`
+      : null,
+  ].filter(Boolean);
+
+  return { success: partes.join(". ") + "." };
+}
+
+/** Aceita a sugestao da IA de um lancamento, promovendo-a a categoria. */
+export async function acceptSuggestionAction(
+  _prevState: ReconcileState,
+  formData: FormData,
+): Promise<ReconcileState> {
+  const context = await getWorkspaceOrThrow();
+
+  const companyId = parseId(formData, "companyId");
+  if (!companyId.success) return { error: firstIssue(companyId.error) };
+  const company = await assertCompanyInWorkspace(companyId.data, context);
+
+  const transactionId = parseId(formData, "transactionId");
+  if (!transactionId.success) return { error: firstIssue(transactionId.error) };
+
+  await assertTransactionsInWorkspace([transactionId.data], context);
+
+  const transaction = await prisma.transaction.findUnique({
+    where: { id: transactionId.data },
+  });
+
+  if (!transaction?.aiSuggestedCategoryId) {
+    return { error: "Este lançamento não tem sugestão da IA." };
+  }
+
+  await prisma.transaction.update({
+    where: { id: transaction.id },
+    data: {
+      categoryId: transaction.aiSuggestedCategoryId,
+      categorizedBy: "AI",
+      aiSuggestedCategoryId: null,
+    },
+  });
+
+  revalidateCompany(company.id);
+  return { success: "Sugestão aceita." };
+}
+
+/** Descarta a sugestao sem categorizar. */
+export async function dismissSuggestionAction(
+  _prevState: ReconcileState,
+  formData: FormData,
+): Promise<ReconcileState> {
+  const context = await getWorkspaceOrThrow();
+
+  const companyId = parseId(formData, "companyId");
+  if (!companyId.success) return { error: firstIssue(companyId.error) };
+  const company = await assertCompanyInWorkspace(companyId.data, context);
+
+  const transactionId = parseId(formData, "transactionId");
+  if (!transactionId.success) return { error: firstIssue(transactionId.error) };
+
+  await assertTransactionsInWorkspace([transactionId.data], context);
+
+  await prisma.transaction.update({
+    where: { id: transactionId.data },
+    data: { aiSuggestedCategoryId: null, aiConfidence: null },
+  });
+
+  revalidateCompany(company.id);
+  return { success: "Sugestão descartada." };
 }
 
 // ---------------------------------------------------------------------------

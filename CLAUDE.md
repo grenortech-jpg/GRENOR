@@ -332,6 +332,8 @@ Cada fase termina com o sistema rodando e testavel. Commits pequenos e frequente
 **Fase 1 - Estrutura multiempresa: concluida.**
 **Fase 2 - Importacao: concluida.**
 **Fase 3 - Categorizacao por regras: concluida.**
+**Fase 4 - Categorizacao por IA: concluida** (falta exercitar contra a API real:
+depende de ANTHROPIC_API_KEY).
 Demais fases: pendentes.
 
 ### Comandos
@@ -412,6 +414,15 @@ Versoes instaladas ficaram acima do previsto na Secao 2. Diferencas que importam
 - **Regras nunca sobrescrevem categoria existente.** `applyRulesAction` so
   alcanca o que esta com `categoryId: null`: correcao manual e decisao do
   usuario.
+- **Sugestao da IA nao ocupa `categoryId`.** Palpite abaixo de 0.8 vai para
+  `aiSuggestedCategoryId` e o lancamento segue pendente. Se ocupasse
+  `categoryId`, o periodo fecharia como "100% categorizado" carregando um chute
+  para dentro da DRE.
+- **A IA valida o que volta.** Ids de transacao fora do lote e ids de categoria
+  fora do workspace sao descartados antes de gravar: o modelo pode inventar id.
+- **Falha de IA e silenciosa por design** (Secao 8.1). Lote que estoura timeout
+  ou devolve JSON invalido duas vezes fica sem categoria e a execucao segue nos
+  demais.
 
 ### Estrutura
 
@@ -451,6 +462,7 @@ src/
       ofx.ts csv.ts xlsx.ts tabular.ts
       normalize.ts dedupe.ts          dedupeHash e separacao de duplicatas
       storage.ts                      bucket privado de extratos
+    ai/{client,prompt,categorize}.ts  camada 2: IA em lote, limites e custo
     rules/engine.ts                   motor de regras e validacao de padrao
     transactions/transfers.ts         pares de transferencia (Secao 5.4)
     categories/list.ts                plano de contas do workspace

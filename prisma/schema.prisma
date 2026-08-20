@@ -205,15 +205,21 @@ model Transaction {
   categorizedBy CategorizedBy @default(NONE) @map("categorized_by")
   aiConfidence  Float?        @map("ai_confidence")
 
+  /// Palpite da IA abaixo do limiar de confianca (Secao 5.3).
+  /// Fica separado de categoryId de proposito: sugestao nao e categoria, e o
+  /// periodo nao pode fechar com um palpite de 0,6 passando por categorizado.
+  aiSuggestedCategoryId String? @map("ai_suggested_category_id") @db.Uuid
+
   /// Par de transferencia entre contas da mesma empresa (Secao 5.4).
   transferPairId String? @unique @map("transfer_pair_id") @db.Uuid
 
   createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
   updatedAt DateTime @updatedAt @map("updated_at") @db.Timestamptz(6)
 
-  account     BankAccount  @relation(fields: [accountId], references: [id], onDelete: Cascade)
-  importBatch ImportBatch? @relation(fields: [importBatchId], references: [id], onDelete: SetNull)
-  category    Category?    @relation(fields: [categoryId], references: [id], onDelete: SetNull)
+  account             BankAccount  @relation(fields: [accountId], references: [id], onDelete: Cascade)
+  importBatch         ImportBatch? @relation(fields: [importBatchId], references: [id], onDelete: SetNull)
+  category            Category?    @relation("TransactionCategory", fields: [categoryId], references: [id], onDelete: SetNull)
+  aiSuggestedCategory Category?    @relation("TransactionAiSuggestion", fields: [aiSuggestedCategoryId], references: [id], onDelete: SetNull)
 
   transferPair   Transaction? @relation("TransferPair", fields: [transferPairId], references: [id], onDelete: SetNull)
   transferPairOf Transaction? @relation("TransferPair")
@@ -222,6 +228,7 @@ model Transaction {
   @@unique([accountId, fitId])
   @@index([accountId, date])
   @@index([categoryId])
+  @@index([aiSuggestedCategoryId])
   @@index([importBatchId])
   @@map("transactions")
 }
@@ -242,9 +249,10 @@ model Category {
   createdAt         DateTime      @default(now()) @map("created_at") @db.Timestamptz(6)
   updatedAt         DateTime      @updatedAt @map("updated_at") @db.Timestamptz(6)
 
-  workspace    Workspace?     @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
-  transactions Transaction[]
-  rules        CategoryRule[]
+  workspace     Workspace?     @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  transactions  Transaction[]  @relation("TransactionCategory")
+  aiSuggestions Transaction[]  @relation("TransactionAiSuggestion")
+  rules         CategoryRule[]
 
   @@index([workspaceId, group, sortOrder])
   @@map("categories")
