@@ -5,6 +5,7 @@ import { z } from "zod";
 
 import { isSupabaseConfigured } from "@/lib/env";
 import { getSiteUrl } from "@/lib/site-url";
+import { isOAuthProviderEnabled } from "@/lib/supabase/auth-settings";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
 
 export type AuthFormState = {
@@ -224,6 +225,12 @@ export async function updatePasswordAction(
 export async function signInWithGoogleAction(formData: FormData) {
   if (!isSupabaseConfigured()) {
     redirect("/login?erro=config");
+  }
+
+  // signInWithOAuth apenas monta a URL de autorizacao; com o provider
+  // desligado o erro so apareceria no Supabase, como JSON cru.
+  if (!(await isOAuthProviderEnabled("google"))) {
+    redirect("/login?erro=google");
   }
 
   const supabase = await createSupabaseServerClient();

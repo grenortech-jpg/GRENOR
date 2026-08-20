@@ -26,12 +26,6 @@ export default function SignUpPage() {
       <CardContent className="space-y-5">
         <SignUpForm />
 
-        <div className="flex items-center gap-3 text-xs text-muted-foreground">
-          <span className="h-px flex-1 bg-border" />
-          ou
-          <span className="h-px flex-1 bg-border" />
-        </div>
-
         <GoogleButton redirectTo="/onboarding" />
 
         <p className="text-center text-sm text-muted-foreground">

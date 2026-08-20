@@ -1,20 +1,38 @@
 import { signInWithGoogleAction } from "@/app/(auth)/actions";
 import { SubmitButton } from "@/components/forms/submit-button";
+import { isOAuthProviderEnabled } from "@/lib/supabase/auth-settings";
 
-/** Entrada com Google. O fluxo OAuth roda inteiro no servidor. */
-export function GoogleButton({ redirectTo }: { redirectTo?: string }) {
+/**
+ * Entrada com Google. O fluxo OAuth roda inteiro no servidor.
+ *
+ * So aparece quando o provider esta habilitado no Supabase: caso contrario o
+ * clique levaria o usuario a uma pagina de erro em JSON do proprio Supabase.
+ */
+export async function GoogleButton({ redirectTo }: { redirectTo?: string }) {
+  if (!(await isOAuthProviderEnabled("google"))) return null;
+
   return (
-    <form action={signInWithGoogleAction}>
-      {redirectTo && <input type="hidden" name="redirect" value={redirectTo} />}
-      <SubmitButton
-        variant="outline"
-        className="w-full"
-        pendingLabel="Redirecionando…"
-      >
-        <GoogleMark />
-        Continuar com Google
-      </SubmitButton>
-    </form>
+    <>
+      <div className="flex items-center gap-3 text-xs text-muted-foreground">
+        <span className="h-px flex-1 bg-border" />
+        ou
+        <span className="h-px flex-1 bg-border" />
+      </div>
+
+      <form action={signInWithGoogleAction}>
+        {redirectTo && (
+          <input type="hidden" name="redirect" value={redirectTo} />
+        )}
+        <SubmitButton
+          variant="outline"
+          className="w-full"
+          pendingLabel="Redirecionando…"
+        >
+          <GoogleMark />
+          Continuar com Google
+        </SubmitButton>
+      </form>
+    </>
   );
 }
 

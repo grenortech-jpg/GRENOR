@@ -16,7 +16,8 @@ export const metadata: Metadata = { title: "Entrar" };
 
 const ERROR_MESSAGES: Record<string, string> = {
   auth: "Não foi possível concluir a autenticação. Tente novamente.",
-  google: "Falha ao conectar com o Google. Tente novamente.",
+  google:
+    "Entrada com Google indisponível: o provider não está habilitado no Supabase.",
   link: "Este link expirou ou já foi usado. Peça um novo.",
   config:
     "Supabase não configurado. Preencha o .env com as chaves do seu projeto (veja o README) e reinicie o servidor.",
@@ -44,12 +45,6 @@ export default async function LoginPage({ searchParams }: PageProps<"/login">) {
         )}
 
         <LoginForm redirectTo={redirectTo} />
-
-        <div className="flex items-center gap-3 text-xs text-muted-foreground">
-          <span className="h-px flex-1 bg-border" />
-          ou
-          <span className="h-px flex-1 bg-border" />
-        </div>
 
         <GoogleButton redirectTo={redirectTo} />
 
