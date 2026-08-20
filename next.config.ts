@@ -1,7 +1,27 @@
 import type { NextConfig } from "next";
 
 const nextConfig: NextConfig = {
-  /* config options here */
+  /**
+   * O Chromium e o Playwright nao podem ser processados pelo bundler.
+   *
+   * O @sparticuz/chromium carrega um binario a partir do proprio diretorio no
+   * disco; empacotado, ele perde o caminho e a geracao de PDF falha em
+   * producao com um erro que nao acontece em desenvolvimento.
+   */
+  serverExternalPackages: [
+    "@sparticuz/chromium",
+    "playwright-core",
+    "@prisma/adapter-pg",
+  ],
+
+  /**
+   * O binario do Chromium precisa ir junto no pacote da function que gera o
+   * PDF. Sem isto, o rastreamento de dependencias nao o inclui - ele nao e
+   * alcancado por nenhum `import`.
+   */
+  outputFileTracingIncludes: {
+    "/api/relatorio/**": ["./node_modules/@sparticuz/chromium/bin/**"],
+  },
 };
 
 export default nextConfig;
