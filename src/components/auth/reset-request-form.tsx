@@ -6,7 +6,7 @@ import {
   requestPasswordResetAction,
   type AuthFormState,
 } from "@/app/(auth)/actions";
-import { FormFeedback } from "@/components/auth/form-feedback";
+import { FormFeedback } from "@/components/forms/form-feedback";
 import { SubmitButton } from "@/components/forms/submit-button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";

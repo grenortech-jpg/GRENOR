@@ -1,9 +1,12 @@
 import { AlertCircle, CheckCircle2 } from "lucide-react";
 
-import type { AuthFormState } from "@/app/(auth)/actions";
+export type FeedbackState = {
+  error?: string;
+  success?: string;
+};
 
-/** Mensagem de erro ou sucesso de um formulario de autenticacao. */
-export function FormFeedback({ state }: { state: AuthFormState }) {
+/** Mensagem de erro ou sucesso de um formulario. */
+export function FormFeedback({ state }: { state: FeedbackState }) {
   if (state.error) {
     return (
       <p

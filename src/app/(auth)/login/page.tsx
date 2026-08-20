@@ -1,7 +1,7 @@
 import type { Metadata } from "next";
 import Link from "next/link";
 
-import { FormFeedback } from "@/components/auth/form-feedback";
+import { FormFeedback } from "@/components/forms/form-feedback";
 import { GoogleButton } from "@/components/auth/google-button";
 import { LoginForm } from "@/components/auth/login-form";
 import {

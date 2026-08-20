@@ -1,126 +1,77 @@
 import type { Metadata } from "next";
-import { CheckCircle2, CircleAlert, Database } from "lucide-react";
+import { Building2 } from "lucide-react";
 
-import { Badge } from "@/components/ui/badge";
-import {
-  Card,
-  CardContent,
-  CardDescription,
-  CardHeader,
-  CardTitle,
-} from "@/components/ui/card";
-import { displayName, requireUser } from "@/lib/auth/session";
-import { prisma } from "@/lib/prisma";
+import { CompanyCard } from "@/components/companies/company-card";
+import { CompanySearch } from "@/components/companies/company-search";
+import { NewCompanyDialog } from "@/components/companies/new-company-dialog";
+import { getWorkspaceOrThrow } from "@/lib/auth/workspace";
+import { listCompanyOverviews } from "@/lib/companies/overview";
+import { formatMonth } from "@/lib/format";
+import { currentMonth } from "@/lib/period";
 
-export const metadata: Metadata = { title: "Painel" };
+export const metadata: Metadata = { title: "Empresas" };
 
-type DatabaseStatus =
-  | { ok: true; categories: number; workspaces: number }
-  | { ok: false; message: string };
+export default async function DashboardPage({ searchParams }: PageProps<"/app">) {
+  const context = await getWorkspaceOrThrow();
 
-async function checkDatabase(): Promise<DatabaseStatus> {
-  try {
-    const [categories, workspaces] = await Promise.all([
-      prisma.category.count({ where: { workspaceId: null } }),
-      prisma.workspace.count(),
-    ]);
-    return { ok: true, categories, workspaces };
-  } catch (error) {
-    return {
-      ok: false,
-      message: error instanceof Error ? error.message : "Erro desconhecido.",
-    };
-  }
-}
+  const params = await searchParams;
+  const search = typeof params.busca === "string" ? params.busca : "";
 
-export default async function DashboardPage() {
-  const user = await requireUser();
-  const status = await checkDatabase();
+  const month = currentMonth();
+  const companies = await listCompanyOverviews(context, { search, month });
 
   return (
-    <div className="space-y-8">
-      <div>
-        <h1 className="text-2xl font-semibold tracking-tight">
-          Olá, {displayName(user).split(" ")[0]}
-        </h1>
-        <p className="mt-1 text-sm text-muted-foreground">
-          A fundação do Grenor está no ar. O painel de empresas chega na Fase 1.
-        </p>
+    <div className="space-y-6">
+      <div className="flex flex-wrap items-end justify-between gap-4">
+        <div>
+          <h1 className="text-2xl font-semibold tracking-tight">Empresas</h1>
+          <p className="mt-1 text-sm text-muted-foreground">
+            {context.workspace.name} · situação de {formatMonth(month.year, month.month)}
+          </p>
+        </div>
+
+        <NewCompanyDialog />
       </div>
 
-      <Card>
-        <CardHeader className="flex-row items-center gap-3 space-y-0">
-          <Database className="size-5 text-muted-foreground" aria-hidden="true" />
-          <div className="flex-1">
-            <CardTitle className="text-base">Estado da fundação</CardTitle>
-            <CardDescription>
-              Verificação de conexão com o banco e do plano de contas padrão.
-            </CardDescription>
-          </div>
-          {status.ok ? (
-            <Badge className="bg-positive/10 text-positive hover:bg-positive/10">
-              Conectado
-            </Badge>
-          ) : (
-            <Badge variant="destructive">Sem conexão</Badge>
-          )}
-        </CardHeader>
+      <CompanySearch initialValue={search} />
 
-        <CardContent>
-          {status.ok ? (
-            <ul className="space-y-2 text-sm">
-              <StatusLine ok>
-                Banco de dados respondendo pelo Prisma.
-              </StatusLine>
-              <StatusLine ok={status.categories > 0}>
-                {status.categories > 0
-                  ? `Plano de contas padrão com ${status.categories} categorias.`
-                  : "Plano de contas padrão ainda não semeado (rode npm run db:seed)."}
-              </StatusLine>
-              <StatusLine ok>
-                {status.workspaces === 0
-                  ? "Nenhum workspace criado ainda."
-                  : `${status.workspaces} workspace(s) cadastrado(s).`}
-              </StatusLine>
-            </ul>
-          ) : (
-            <div className="space-y-2 text-sm">
-              <p className="text-muted-foreground">
-                Não foi possível consultar o banco. Confira DATABASE_URL e se as
-                migrações foram aplicadas.
-              </p>
-              <pre className="overflow-x-auto rounded-md bg-muted p-3 text-xs text-muted-foreground">
-                {status.message}
-              </pre>
-            </div>
-          )}
-        </CardContent>
-      </Card>
+      {companies.length > 0 ? (
+        <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+          {companies.map((company) => (
+            <CompanyCard key={company.id} company={company} />
+          ))}
+        </div>
+      ) : search ? (
+        <EmptyState
+          title="Nenhuma empresa encontrada"
+          description={`Nada corresponde a "${search}". Tente outro nome ou CNPJ.`}
+        />
+      ) : (
+        <EmptyState
+          title="Nenhuma empresa cadastrada"
+          description="Cadastre a primeira empresa cliente para começar a importar extratos."
+          action={<NewCompanyDialog label="Cadastrar primeira empresa" />}
+        />
+      )}
     </div>
   );
 }
 
-function StatusLine({
-  ok,
-  children,
+function EmptyState({
+  title,
+  description,
+  action,
 }: {
-  ok: boolean;
-  children: React.ReactNode;
+  title: string;
+  description: string;
+  action?: React.ReactNode;
 }) {
   return (
-    <li className="flex items-start gap-2">
-      {ok ? (
-        <CheckCircle2
-          className="mt-0.5 size-4 shrink-0 text-positive"
-          aria-hidden="true"
-        />
-      ) : (
-        <CircleAlert
-          className="mt-0.5 size-4 shrink-0 text-gold"
-          aria-hidden="true"
-        />
-      )}
-      <span>{children}</span>
-    </li>
+    <div className="flex flex-col items-center rounded-lg border border-dashed px-6 py-16 text-center">
+      <Building2 className="size-8 text-muted-foreground" aria-hidden="true" />
+      <h2 className="mt-4 font-medium">{title}</h2>
+      <p className="mt-1 max-w-sm text-sm text-muted-foreground">{description}</p>
+      {action && <div className="mt-6">{action}</div>}
+    </div>
   );
 }

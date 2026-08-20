@@ -328,7 +328,9 @@ Cada fase termina com o sistema rodando e testavel. Commits pequenos e frequente
 
 ## 13. Estado da construcao
 
-**Fase 0 - Fundacao: concluida.** Demais fases: pendentes.
+**Fase 0 - Fundacao: concluida.**
+**Fase 1 - Estrutura multiempresa: concluida.**
+Demais fases: pendentes.
 
 ### Comandos
 
@@ -338,7 +340,9 @@ Cada fase termina com o sistema rodando e testavel. Commits pequenos e frequente
 | `npm run build` | Build de producao |
 | `npm run typecheck` | `tsc --noEmit` |
 | `npm run lint` | ESLint |
-| `npm test` | Vitest (uma vez) |
+| `npm test` | Testes unitarios (sem rede) |
+| `npm run test:db` | Testes de isolamento multi-tenant (exige banco) |
+| `npm run test:all` | Unitarios + integracao |
 | `npm run db:deploy` | Aplica as migracoes |
 | `npm run db:seed` | Semeia o plano de contas padrao |
 | `npm run db:setup` | migrate deploy + generate + seed |
@@ -372,6 +376,24 @@ Versoes instaladas ficaram acima do previsto na Secao 2. Diferencas que importam
 - **Rotas em portugues** para telas (`/cadastro`, `/recuperar-senha`, `/configuracoes`);
   codigo, tipos e nomes de variaveis em ingles.
 
+### Convencoes descobertas na pratica
+
+- **FormData.get() devolve `null`**, e `null` nao satisfaz `z.string().optional()`.
+  Leia sempre por `field()` (em `src/lib/auth/forms.ts` e
+  `src/lib/validation/schemas.ts`). Um campo opcional ausente ja derrubou o
+  login inteiro uma vez.
+- **Dinheiro em centavos, sempre.** `parseMoneyToCents` aceita todos os formatos
+  da Secao 5.1; `formatMoney`/`formatAmount` sao o caminho de volta. Nunca
+  construa valor monetario com aritmetica de ponto flutuante.
+- **Datas civis em UTC meia-noite.** `parseCivilDate` e `formatDate` cuidam
+  disso; formatar em fuso local produz "um dia a menos".
+- **Mes de competencia vem de `currentMonth()`**, que resolve em
+  America/Sao_Paulo, nao no fuso do servidor.
+- **Toda leitura de recurso por id do cliente passa por um `assert*InWorkspace`**
+  (`src/lib/auth/workspace.ts`). Recurso alheio responde 404, nunca 403.
+- **`server-only` quebra fora do bundler do Next.** Testes de integracao usam o
+  stub em `tests/integration/server-only-stub.ts`.
+
 ### Estrutura
 
 ```
@@ -383,16 +405,28 @@ prisma/
 src/
   app/
     (auth)/                           login, cadastro, recuperar-senha, nova-senha
-    (app)/                            area autenticada (app, onboarding)
+    (app)/                            area autenticada
+      app/                            grid de empresas, busca, nova empresa
+      empresas/[id]/                  visao da empresa, contas, periodos
+      configuracoes/                  workspace, membros, plano de contas
+      onboarding/                     wizard de 4 passos
+      actions.ts                      CRUD de workspace, empresa e conta
     auth/callback|confirmar/          retorno de OAuth e de links por e-mail
   components/
     ui/                               shadcn/ui
     auth/ app/ brand/ forms/
   lib/
     auth/session.ts                   getCurrentUser, requireUser
+    auth/workspace.ts                 getWorkspaceOrThrow, assert*InWorkspace
+    auth/forms.ts                     schemas dos formularios de auth
+    validation/schemas.ts             schemas de workspace/empresa/conta
     categories/default-plan.ts        plano de contas (fonte unica)
-    supabase/{server,client,admin}.ts
+    companies/overview.ts             grid do workspace com status do mes
+    workspace/{create,slug}.ts        criacao do workspace e slug
+    format.ts period.ts               dinheiro, datas civis, competencia
+    supabase/{server,client,admin,auth-settings}.ts
     env.ts prisma.ts site-url.ts
   proxy.ts                            renovacao de sessao + guarda de rotas
-tests/unit/
+tests/unit/                           sem rede
+tests/integration/                    isolamento multi-tenant, exige banco
 ```
