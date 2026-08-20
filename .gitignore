@@ -50,3 +50,6 @@ next-env.d.ts
 # Artefatos de conferencia visual do relatorio
 /relatorio-*.pdf
 /relatorio-*.png
+
+.vercel
+.env*
