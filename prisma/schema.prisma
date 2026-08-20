@@ -1,0 +1,315 @@
+// Grenor - schema principal.
+// Regras transversais:
+// - Todo valor monetario e armazenado em centavos (Int). Nunca float.
+// - Datas de transacao sao datas civis (@db.Date), sem hora.
+// - Tabelas e colunas em snake_case para manter o SQL de RLS legivel.
+
+generator client {
+  provider = "prisma-client"
+  output   = "../src/generated/prisma"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+// ---------------------------------------------------------------------------
+// Enums
+// ---------------------------------------------------------------------------
+
+enum MemberRole {
+  OWNER
+  ADMIN
+  MEMBER
+
+  @@map("member_role")
+}
+
+enum ImportFileType {
+  OFX
+  CSV
+  XLSX
+
+  @@map("import_file_type")
+}
+
+enum ImportStatus {
+  PENDING
+  PARSED
+  CONFIRMED
+  FAILED
+
+  @@map("import_status")
+}
+
+enum CategorizedBy {
+  RULE
+  AI
+  MANUAL
+  NONE
+
+  @@map("categorized_by")
+}
+
+/// Grupos da DRE de caixa (Secao 6 do CLAUDE.md).
+/// Os grupos 7 (resultado operacional) e 10 (geracao liquida) sao calculados
+/// e por isso nao existem como grupo de categoria.
+enum CategoryGroup {
+  REVENUE // 1. RECEITAS
+  SALES_TAXES // 2. (-) IMPOSTOS SOBRE VENDAS
+  VARIABLE_COSTS // 3. (-) CUSTOS VARIAVEIS
+  PERSONNEL // 4. (-) DESPESAS COM PESSOAL
+  OPERATING_EXPENSES // 5. (-) DESPESAS OPERACIONAIS
+  FINANCIAL_EXPENSES // 6. (-) DESPESAS FINANCEIRAS
+  INVESTMENTS // 8. INVESTIMENTOS
+  EQUITY_AND_LOANS // 9. MOVIMENTACOES SOCIETARIAS E EMPRESTIMOS
+  TRANSFERS // 11. TRANSFERENCIAS ENTRE CONTAS (neutro)
+
+  @@map("category_group")
+}
+
+enum RuleMatchType {
+  CONTAINS
+  STARTS_WITH
+  REGEX
+
+  @@map("rule_match_type")
+}
+
+enum PeriodStatus {
+  OPEN
+  CLOSED
+
+  @@map("period_status")
+}
+
+// ---------------------------------------------------------------------------
+// Tenancy
+// ---------------------------------------------------------------------------
+
+/// Escritorio de contabilidade / BPO. Raiz de todo isolamento multi-tenant.
+model Workspace {
+  id        String   @id @default(uuid()) @db.Uuid
+  name      String
+  slug      String   @unique
+  logoUrl   String?  @map("logo_url")
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt DateTime @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  members    WorkspaceMember[]
+  companies  Company[]
+  categories Category[]
+  rules      CategoryRule[]
+
+  @@map("workspaces")
+}
+
+/// Vinculo entre um usuario do Supabase Auth e um workspace.
+model WorkspaceMember {
+  id          String     @id @default(uuid()) @db.Uuid
+  workspaceId String     @map("workspace_id") @db.Uuid
+  /// auth.users.id do Supabase. Sem FK: vive em outro schema.
+  userId      String     @map("user_id") @db.Uuid
+  role        MemberRole @default(MEMBER)
+  createdAt   DateTime   @default(now()) @map("created_at") @db.Timestamptz(6)
+
+  workspace Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+
+  @@unique([workspaceId, userId])
+  @@index([userId])
+  @@map("workspace_members")
+}
+
+/// Empresa cliente do escritorio.
+model Company {
+  id          String   @id @default(uuid()) @db.Uuid
+  workspaceId String   @map("workspace_id") @db.Uuid
+  name        String
+  cnpj        String?
+  segment     String?
+  logoUrl     String?  @map("logo_url")
+  createdAt   DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt   DateTime @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  workspace Workspace     @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  accounts  BankAccount[]
+  periods   Period[]
+
+  @@index([workspaceId])
+  @@map("companies")
+}
+
+/// Conta bancaria de uma empresa.
+/// openingBalance* sao obrigatorios: sem saldo inicial nao existe saldo
+/// consolidado nem evolucao do saldo no relatorio.
+model BankAccount {
+  id                  String   @id @default(uuid()) @db.Uuid
+  companyId           String   @map("company_id") @db.Uuid
+  bankName            String   @map("bank_name")
+  nickname            String
+  openingBalanceCents Int      @map("opening_balance_cents")
+  openingBalanceDate  DateTime @map("opening_balance_date") @db.Date
+  createdAt           DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt           DateTime @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  company       Company       @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  transactions  Transaction[]
+  importBatches ImportBatch[]
+
+  @@index([companyId])
+  @@map("bank_accounts")
+}
+
+// ---------------------------------------------------------------------------
+// Importacao e transacoes
+// ---------------------------------------------------------------------------
+
+/// Um upload de arquivo de extrato.
+model ImportBatch {
+  id             String         @id @default(uuid()) @db.Uuid
+  accountId      String         @map("account_id") @db.Uuid
+  fileName       String         @map("file_name")
+  fileType       ImportFileType @map("file_type")
+  /// Caminho no Supabase Storage (bucket privado de extratos).
+  storagePath    String?        @map("storage_path")
+  status         ImportStatus   @default(PENDING)
+  rowsTotal      Int            @default(0) @map("rows_total")
+  rowsImported   Int            @default(0) @map("rows_imported")
+  rowsDuplicated Int            @default(0) @map("rows_duplicated")
+  errorMessage   String?        @map("error_message")
+  createdAt      DateTime       @default(now()) @map("created_at") @db.Timestamptz(6)
+  confirmedAt    DateTime?      @map("confirmed_at") @db.Timestamptz(6)
+
+  account      BankAccount   @relation(fields: [accountId], references: [id], onDelete: Cascade)
+  transactions Transaction[]
+
+  @@index([accountId, createdAt])
+  @@map("import_batches")
+}
+
+model Transaction {
+  id            String   @id @default(uuid()) @db.Uuid
+  accountId     String   @map("account_id") @db.Uuid
+  importBatchId String?  @map("import_batch_id") @db.Uuid
+  date          DateTime @db.Date
+  /// Descricao original do extrato, sempre preservada para exibicao.
+  description   String
+  /// Negativo = saida.
+  amountCents   Int      @map("amount_cents")
+  /// FITID do OFX quando existir.
+  fitId         String?  @map("fit_id")
+  /// sha256(accountId + date + amountCents + descricao normalizada).
+  dedupeHash    String   @map("dedupe_hash")
+
+  categoryId    String?       @map("category_id") @db.Uuid
+  categorizedBy CategorizedBy @default(NONE) @map("categorized_by")
+  aiConfidence  Float?        @map("ai_confidence")
+
+  /// Par de transferencia entre contas da mesma empresa (Secao 5.4).
+  transferPairId String? @unique @map("transfer_pair_id") @db.Uuid
+
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt DateTime @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  account     BankAccount  @relation(fields: [accountId], references: [id], onDelete: Cascade)
+  importBatch ImportBatch? @relation(fields: [importBatchId], references: [id], onDelete: SetNull)
+  category    Category?    @relation(fields: [categoryId], references: [id], onDelete: SetNull)
+
+  transferPair   Transaction? @relation("TransferPair", fields: [transferPairId], references: [id], onDelete: SetNull)
+  transferPairOf Transaction? @relation("TransferPair")
+
+  @@unique([accountId, dedupeHash])
+  @@unique([accountId, fitId])
+  @@index([accountId, date])
+  @@index([categoryId])
+  @@index([importBatchId])
+  @@map("transactions")
+}
+
+// ---------------------------------------------------------------------------
+// Plano de contas e regras
+// ---------------------------------------------------------------------------
+
+/// Plano de contas gerencial. workspaceId null = categoria padrao do sistema
+/// (copiada para o workspace no onboarding).
+model Category {
+  id                String        @id @default(uuid()) @db.Uuid
+  workspaceId       String?       @map("workspace_id") @db.Uuid
+  name              String
+  group             CategoryGroup
+  sortOrder         Int           @map("sort_order")
+  isTransferNeutral Boolean       @default(false) @map("is_transfer_neutral")
+  createdAt         DateTime      @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt         DateTime      @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  workspace    Workspace?     @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  transactions Transaction[]
+  rules        CategoryRule[]
+
+  @@index([workspaceId, group, sortOrder])
+  @@map("categories")
+}
+
+/// Motor de regras deterministico do workspace (camada 1 da categorizacao).
+model CategoryRule {
+  id          String        @id @default(uuid()) @db.Uuid
+  workspaceId String        @map("workspace_id") @db.Uuid
+  categoryId  String        @map("category_id") @db.Uuid
+  matchType   RuleMatchType @map("match_type")
+  pattern     String
+  priority    Int           @default(100)
+  active      Boolean       @default(true)
+  createdAt   DateTime      @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt   DateTime      @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  workspace Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  category  Category  @relation(fields: [categoryId], references: [id], onDelete: Cascade)
+
+  @@index([workspaceId, active, priority])
+  @@map("category_rules")
+}
+
+// ---------------------------------------------------------------------------
+// Fechamento e relatorio
+// ---------------------------------------------------------------------------
+
+model Period {
+  id        String       @id @default(uuid()) @db.Uuid
+  companyId String       @map("company_id") @db.Uuid
+  year      Int
+  month     Int
+  status    PeriodStatus @default(OPEN)
+  closedAt  DateTime?    @map("closed_at") @db.Timestamptz(6)
+  createdAt DateTime     @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt DateTime     @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  company Company @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  report  Report?
+
+  @@unique([companyId, year, month])
+  @@map("periods")
+}
+
+model Report {
+  id       String @id @default(uuid()) @db.Uuid
+  periodId String @unique @map("period_id") @db.Uuid
+
+  pdfUrl       String? @map("pdf_url")
+  shareToken   String  @unique @default(uuid()) @map("share_token") @db.Uuid
+  shareEnabled Boolean @default(false) @map("share_enabled")
+
+  /// Parecer executivo (IA ou texto manual).
+  aiSummary           String? @map("ai_summary")
+  /// Quantas vezes o parecer foi regerado por IA (limite 3, Secao 5.6).
+  aiRegenerationCount Int     @default(0) @map("ai_regeneration_count")
+
+  /// Dados do periodo congelados no fechamento.
+  snapshotJson Json      @map("snapshot_json")
+  generatedAt  DateTime? @map("generated_at") @db.Timestamptz(6)
+  createdAt    DateTime  @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt    DateTime  @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  period Period @relation(fields: [periodId], references: [id], onDelete: Cascade)
+
+  @@map("reports")
+}
