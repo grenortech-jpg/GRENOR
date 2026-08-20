@@ -330,6 +330,7 @@ Cada fase termina com o sistema rodando e testavel. Commits pequenos e frequente
 
 **Fase 0 - Fundacao: concluida.**
 **Fase 1 - Estrutura multiempresa: concluida.**
+**Fase 2 - Importacao: concluida.**
 Demais fases: pendentes.
 
 ### Comandos
@@ -393,6 +394,15 @@ Versoes instaladas ficaram acima do previsto na Secao 2. Diferencas que importam
   (`src/lib/auth/workspace.ts`). Recurso alheio responde 404, nunca 403.
 - **`server-only` quebra fora do bundler do Next.** Testes de integracao usam o
   stub em `tests/integration/server-only-stub.ts`.
+- **dedupeHash carrega a ordem de ocorrencia.** A Secao 4 define o hash por
+  accountId+data+valor+descricao, mas duas transacoes legitimamente distintas
+  podem ter os quatro iguais (dois PIX de R$ 50 no mesmo dia). A n-esima
+  ocorrencia entra no hash com sufixo, entao repeticao real sobrevive e
+  reimportar o mesmo arquivo continua nao duplicando.
+- **O preview nao e fonte de verdade.** A confirmacao da importacao reprocessa
+  o arquivo guardado no Storage; o cliente nao dita quais linhas entram.
+- **`xlsx` no npm esta em 0.18.5, abandonada e com CVEs.** Usamos 0.20.3 do CDN
+  oficial do SheetJS (ver a URL em package.json). Nao troque por `npm i xlsx`.
 
 ### Estrutura
 
@@ -409,6 +419,7 @@ src/
       app/                            grid de empresas, busca, nova empresa
       empresas/[id]/                  visao da empresa, contas, periodos
       configuracoes/                  workspace, membros, plano de contas
+      empresas/[id]/importar/         upload, preview e confirmacao
       onboarding/                     wizard de 4 passos
       actions.ts                      CRUD de workspace, empresa e conta
     auth/callback|confirmar/          retorno de OAuth e de links por e-mail
@@ -423,10 +434,17 @@ src/
     categories/default-plan.ts        plano de contas (fonte unica)
     companies/overview.ts             grid do workspace com status do mes
     workspace/{create,slug}.ts        criacao do workspace e slug
+    import/                           parsers e normalizacao da Secao 5.1
+      parse.ts                        orquestrador, deteccao de formato, limites
+      encoding.ts dates.ts            latin-1, dd/mm/aaaa, serial do Excel
+      ofx.ts csv.ts xlsx.ts tabular.ts
+      normalize.ts dedupe.ts          dedupeHash e separacao de duplicatas
+      storage.ts                      bucket privado de extratos
     format.ts period.ts               dinheiro, datas civis, competencia
     supabase/{server,client,admin,auth-settings}.ts
     env.ts prisma.ts site-url.ts
   proxy.ts                            renovacao de sessao + guarda de rotas
 tests/unit/                           sem rede
-tests/integration/                    isolamento multi-tenant, exige banco
+tests/fixtures/                       OFX 1.x, OFX 2.x, CSV ; , e XLSX
+tests/integration/                    isolamento e importacao, exigem banco
 ```

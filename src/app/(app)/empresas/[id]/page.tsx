@@ -5,6 +5,7 @@ import { ArrowLeft, Upload } from "lucide-react";
 import { AccountList, type AccountView } from "@/components/accounts/account-list";
 import { CompanyStatusBadge } from "@/components/companies/company-card";
 import { CompanySettings } from "@/components/companies/company-settings";
+import { buttonVariants } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { canAdminister, assertCompanyInWorkspace, getWorkspaceOrThrow } from "@/lib/auth/workspace";
 import { listCompanyOverviews } from "@/lib/companies/overview";
@@ -114,10 +115,13 @@ export default async function CompanyPage({ params }: PageProps<"/empresas/[id]"
             </p>
           </div>
 
-          <span className="inline-flex items-center gap-1.5 text-sm text-muted-foreground">
+          <Link
+            href={`/empresas/${company.id}/importar`}
+            className={buttonVariants({ variant: "outline", size: "sm" })}
+          >
             <Upload className="size-4" aria-hidden="true" />
-            Importação de extratos: Fase 2
-          </span>
+            Importar extrato
+          </Link>
         </CardContent>
       </Card>
 
