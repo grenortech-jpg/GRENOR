@@ -1,7 +1,9 @@
 import type { Metadata } from "next";
+import Link from "next/link";
 
 import { WorkspaceForm } from "@/components/workspace/workspace-form";
 import { Badge } from "@/components/ui/badge";
+import { buttonVariants } from "@/components/ui/button";
 import {
   Card,
   CardContent,
@@ -29,7 +31,7 @@ export default async function SettingsPage() {
   const context = await getWorkspaceOrThrow();
   const user = await getCurrentUser();
 
-  const [members, categories, companiesCount] = await Promise.all([
+  const [members, categories, companiesCount, rulesCount] = await Promise.all([
     prisma.workspaceMember.findMany({
       where: { workspaceId: context.workspace.id },
       orderBy: { createdAt: "asc" },
@@ -39,6 +41,7 @@ export default async function SettingsPage() {
       orderBy: [{ sortOrder: "asc" }],
     }),
     prisma.company.count({ where: { workspaceId: context.workspace.id } }),
+    prisma.categoryRule.count({ where: { workspaceId: context.workspace.id } }),
   ]);
 
   const byGroup = CATEGORY_GROUP_ORDER.map((group) => ({
@@ -107,6 +110,25 @@ export default async function SettingsPage() {
               </li>
             ))}
           </ul>
+        </CardContent>
+      </Card>
+
+      <Card>
+        <CardHeader>
+          <CardTitle className="text-base">Regras de categorização</CardTitle>
+          <CardDescription>
+            {rulesCount === 0
+              ? "Nenhuma regra ainda. Elas nascem na conciliação, ao corrigir a categoria de um lançamento."
+              : `${rulesCount} regra(s) ativas para todas as empresas do escritório.`}
+          </CardDescription>
+        </CardHeader>
+        <CardContent>
+          <Link
+            href="/configuracoes/regras"
+            className={buttonVariants({ variant: "outline", size: "sm" })}
+          >
+            Gerenciar regras
+          </Link>
         </CardContent>
       </Card>
 

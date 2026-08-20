@@ -1,6 +1,6 @@
 import type { Metadata } from "next";
 import Link from "next/link";
-import { ArrowLeft, Upload } from "lucide-react";
+import { ArrowLeft, ListChecks, Upload } from "lucide-react";
 
 import { AccountList, type AccountView } from "@/components/accounts/account-list";
 import { CompanyStatusBadge } from "@/components/companies/company-card";
@@ -113,13 +113,24 @@ export default async function CompanyPage({ params }: PageProps<"/empresas/[id]"
             </p>
           </div>
 
-          <Link
-            href={`/empresas/${company.id}/importar`}
-            className={buttonVariants({ variant: "outline", size: "sm" })}
-          >
-            <Upload className="size-4" aria-hidden="true" />
-            Importar extrato
-          </Link>
+          <div className="flex flex-wrap gap-2">
+            {overview && overview.transactionsInMonth > 0 && (
+              <Link
+                href={`/empresas/${company.id}/conciliacao`}
+                className={buttonVariants({ size: "sm" })}
+              >
+                <ListChecks className="size-4" aria-hidden="true" />
+                Conciliar
+              </Link>
+            )}
+            <Link
+              href={`/empresas/${company.id}/importar`}
+              className={buttonVariants({ variant: "outline", size: "sm" })}
+            >
+              <Upload className="size-4" aria-hidden="true" />
+              Importar extrato
+            </Link>
+          </div>
         </CardContent>
       </Card>
 

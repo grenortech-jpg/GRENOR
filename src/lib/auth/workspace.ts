@@ -118,6 +118,31 @@ export async function assertPeriodInWorkspace(
   return period;
 }
 
+/**
+ * Garante que TODAS as transacoes informadas sao do workspace.
+ *
+ * A edicao em massa recebe uma lista de ids do cliente. Validar uma a uma seria
+ * uma consulta por item; contar de uma vez custa uma consulta e falha se
+ * qualquer id for de fora.
+ */
+export async function assertTransactionsInWorkspace(
+  transactionIds: string[],
+  context: WorkspaceContext,
+): Promise<void> {
+  if (transactionIds.length === 0) return;
+
+  const unique = [...new Set(transactionIds)];
+
+  const found = await prisma.transaction.count({
+    where: {
+      id: { in: unique },
+      account: { company: { workspaceId: context.workspace.id } },
+    },
+  });
+
+  if (found !== unique.length) notFound();
+}
+
 /** Garante que uma categoria pertence ao workspace (ou e do sistema). */
 export async function assertCategoryInWorkspace(
   categoryId: string,

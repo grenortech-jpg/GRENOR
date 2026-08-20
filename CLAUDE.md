@@ -331,6 +331,7 @@ Cada fase termina com o sistema rodando e testavel. Commits pequenos e frequente
 **Fase 0 - Fundacao: concluida.**
 **Fase 1 - Estrutura multiempresa: concluida.**
 **Fase 2 - Importacao: concluida.**
+**Fase 3 - Categorizacao por regras: concluida.**
 Demais fases: pendentes.
 
 ### Comandos
@@ -403,6 +404,14 @@ Versoes instaladas ficaram acima do previsto na Secao 2. Diferencas que importam
   o arquivo guardado no Storage; o cliente nao dita quais linhas entram.
 - **`xlsx` no npm esta em 0.18.5, abandonada e com CVEs.** Usamos 0.20.3 do CDN
   oficial do SheetJS (ver a URL em package.json). Nao troque por `npm i xlsx`.
+- **Regex de regra e entrada de usuario num processo compartilhado.** Todo
+  padrao passa por `validatePattern` antes de ser gravado, que mede o tempo
+  contra sondas adversarias. As sondas terminam com um caractere que IMPEDE o
+  casamento (retrocesso catastrofico so ocorre quando falha) e sao curtas de
+  proposito, para que a propria deteccao termine.
+- **Regras nunca sobrescrevem categoria existente.** `applyRulesAction` so
+  alcanca o que esta com `categoryId: null`: correcao manual e decisao do
+  usuario.
 
 ### Estrutura
 
@@ -419,7 +428,9 @@ src/
       app/                            grid de empresas, busca, nova empresa
       empresas/[id]/                  visao da empresa, contas, periodos
       configuracoes/                  workspace, membros, plano de contas
-      empresas/[id]/importar/         upload, preview e confirmacao
+      empresas/[id]/importar/         upload, preview, mapeamento de colunas
+      empresas/[id]/conciliacao/      tabela do periodo, regras, transferencias
+      configuracoes/regras/           CRUD das regras do workspace
       onboarding/                     wizard de 4 passos
       actions.ts                      CRUD de workspace, empresa e conta
     auth/callback|confirmar/          retorno de OAuth e de links por e-mail
@@ -440,6 +451,9 @@ src/
       ofx.ts csv.ts xlsx.ts tabular.ts
       normalize.ts dedupe.ts          dedupeHash e separacao de duplicatas
       storage.ts                      bucket privado de extratos
+    rules/engine.ts                   motor de regras e validacao de padrao
+    transactions/transfers.ts         pares de transferencia (Secao 5.4)
+    categories/list.ts                plano de contas do workspace
     format.ts period.ts               dinheiro, datas civis, competencia
     supabase/{server,client,admin,auth-settings}.ts
     env.ts prisma.ts site-url.ts
