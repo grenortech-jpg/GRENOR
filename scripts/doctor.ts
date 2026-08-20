@@ -33,7 +33,12 @@ function isPlaceholder(value: string | undefined): boolean {
   );
 }
 
-function checkEnv(): boolean {
+type EnvReport = {
+  supabaseReady: boolean;
+  databaseReady: boolean;
+};
+
+function checkEnv(): EnvReport {
   console.log("\nVariaveis de ambiente");
 
   const required = [
@@ -50,12 +55,12 @@ function checkEnv(): boolean {
     ["DIRECT_URL", "Database > Connection string > conexao direta (5432)"],
   ] as const;
 
-  let complete = true;
+  const missing = new Set<string>();
 
   for (const [name, where] of required) {
     const value = process.env[name];
     if (isPlaceholder(value)) {
-      complete = false;
+      missing.add(name);
       fail(`${name} nao configurada`, `Copie de: ${where}`);
     } else {
       ok(name);
@@ -70,7 +75,13 @@ function checkEnv(): boolean {
     ok("NEXT_PUBLIC_SITE_URL", process.env.NEXT_PUBLIC_SITE_URL);
   }
 
-  return complete;
+  return {
+    supabaseReady:
+      !missing.has("NEXT_PUBLIC_SUPABASE_URL") &&
+      !missing.has("NEXT_PUBLIC_SUPABASE_ANON_KEY"),
+    databaseReady:
+      !missing.has("DATABASE_URL") || !missing.has("DIRECT_URL"),
+  };
 }
 
 async function checkSupabase() {
@@ -173,21 +184,19 @@ async function checkDatabase() {
 async function main() {
   console.log("Grenor — diagnostico da instalacao");
 
-  const envComplete = checkEnv();
+  // Cada bloco roda com o que ja estiver configurado: um .env pela metade
+  // ainda rende diagnostico util sobre a parte que ja funciona.
+  const report = checkEnv();
 
-  if (!envComplete) {
-    console.log(
-      "\nPreencha o .env (passo a passo no README) e rode de novo.\n",
-    );
-    process.exit(1);
-  }
-
-  await checkSupabase();
-  await checkDatabase();
+  if (report.supabaseReady) await checkSupabase();
+  if (report.databaseReady) await checkDatabase();
 
   if (failures > 0) {
     console.log(`\n${failures} item(ns) pendente(s).\n`);
-    process.exit(1);
+    // exitCode em vez de exit(): deixa o timer do fetch fechar sozinho, senao
+    // o libuv aborta no Windows.
+    process.exitCode = 1;
+    return;
   }
 
   console.log("\nTudo pronto.\n");
@@ -195,5 +204,5 @@ async function main() {
 
 main().catch((error) => {
   console.error(error);
-  process.exit(1);
+  process.exitCode = 1;
 });
