@@ -51,6 +51,15 @@ export type AiSuggestion = {
   apply: boolean;
 };
 
+/**
+ * Por que os lotes falharam, quando falharam.
+ *
+ * "billing" e "auth" sao problemas que o usuario resolve em um minuto no
+ * console da Anthropic. Escondê-los atras de "1 lote falhou" transforma uma
+ * correcao trivial numa investigacao.
+ */
+export type FailureReason = "billing" | "auth" | "rate_limit" | "other";
+
 export type CategorizationRun = {
   suggestions: AiSuggestion[];
   batchesRun: number;
@@ -59,7 +68,28 @@ export type CategorizationRun = {
   skipped: number;
   inputTokens: number;
   outputTokens: number;
+  failureReason?: FailureReason;
 };
+
+/** Classifica o erro da API pelo que o usuario pode fazer a respeito. */
+export function classifyFailure(message: string): FailureReason {
+  const normalized = message.toLowerCase();
+
+  if (normalized.includes("credit balance") || normalized.includes("billing")) {
+    return "billing";
+  }
+  if (
+    normalized.includes("authentication") ||
+    normalized.includes("invalid x-api-key") ||
+    normalized.includes("401")
+  ) {
+    return "auth";
+  }
+  if (normalized.includes("rate limit") || normalized.includes("429")) {
+    return "rate_limit";
+  }
+  return "other";
+}
 
 export async function categorizeWithAi(params: {
   workspaceId: string;
@@ -112,6 +142,9 @@ export async function categorizeWithAi(params: {
 
     if (!outcome.results) {
       run.batchesFailed += 1;
+      if (outcome.failureReason && !run.failureReason) {
+        run.failureReason = outcome.failureReason;
+      }
       continue;
     }
 
@@ -136,6 +169,7 @@ export async function categorizeWithAi(params: {
 type BatchOutcome = {
   results: z.infer<typeof resultSchema>["results"] | null;
   usage: { inputTokens: number; outputTokens: number };
+  failureReason?: FailureReason;
 };
 
 async function runBatch(params: {
@@ -151,6 +185,7 @@ async function runBatch(params: {
   });
 
   const usage = { inputTokens: 0, outputTokens: 0 };
+  let failureReason: FailureReason | undefined;
 
   // Uma tentativa mais um retry, conforme a Secao 8.1.
   for (let attempt = 0; attempt <= 1; attempt += 1) {
@@ -214,9 +249,12 @@ async function runBatch(params: {
 
       return { results: parsed.results, usage };
     } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      failureReason = classifyFailure(message);
+
       console.error(
         `[ai:categorize] lote ${params.batchIndex} tentativa ${attempt}:`,
-        error instanceof Error ? error.message : error,
+        message,
       );
 
       logAiUsage({
@@ -228,6 +266,9 @@ async function runBatch(params: {
         outcome: "error",
       });
 
+      // Sem credito ou sem chave valida, tentar de novo so gasta tempo.
+      if (failureReason === "billing" || failureReason === "auth") break;
+
       // Backoff antes do retry unico.
       if (attempt === 0) {
         await new Promise((resolve) => setTimeout(resolve, 1_500));
@@ -235,5 +276,5 @@ async function runBatch(params: {
     }
   }
 
-  return { results: null, usage };
+  return { results: null, usage, failureReason };
 }

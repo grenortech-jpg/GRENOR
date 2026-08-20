@@ -358,6 +358,21 @@ export async function categorizeWithAiAction(
     transactions: pending,
   });
 
+  // Falha que o usuario resolve sozinho merece a instrucao, nao um numero.
+  if (run.suggestions.length === 0 && run.failureReason) {
+    const motivos: Record<string, string> = {
+      billing:
+        "A conta da Anthropic está sem créditos. Adicione em console.anthropic.com → Plans & Billing e tente de novo.",
+      auth:
+        "A chave da Anthropic foi recusada. Confira ANTHROPIC_API_KEY no .env e reinicie o servidor.",
+      rate_limit:
+        "Limite de requisições da Anthropic atingido. Aguarde alguns instantes e tente de novo.",
+      other:
+        "A IA não respondeu. Os lançamentos seguem sem categoria — tente de novo em instantes ou categorize manualmente.",
+    };
+    return { error: motivos[run.failureReason] };
+  }
+
   const applied = run.suggestions.filter((s) => s.apply);
   const suggested = run.suggestions.filter((s) => !s.apply);
 
