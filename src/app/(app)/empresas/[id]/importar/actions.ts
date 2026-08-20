@@ -40,6 +40,8 @@ export type ImportPreview = {
   sheetNames?: string[];
   sheetName?: string;
   mapping?: ColumnMapping;
+  /** Mapeamento vigente, ja no formato de campos de formulario. */
+  mappingFields: Record<string, string>;
   accountHint?: string;
   rowsTotal: number;
   rowsNew: number;
@@ -66,21 +68,45 @@ const mappingSchema = z.object({
   debit: z.coerce.number().int().min(0).optional(),
 });
 
-/** Le o mapeamento manual do formulario, quando o usuario ajustou as colunas. */
+/**
+ * Le o mapeamento manual do formulario, quando o usuario ajustou as colunas.
+ *
+ * Aceita os dois desenhos de extrato: uma coluna de valor com sinal, ou duas
+ * colunas separadas de credito e debito. Um campo vazio significa "nao usar
+ * esta coluna", e nao zero - por isso a leitura passa por optional().
+ */
 function readMapping(formData: FormData): ColumnMapping | undefined {
   const date = field(formData, "map_date");
   const description = field(formData, "map_description");
   const amount = field(formData, "map_amount");
+  const credit = field(formData, "map_credit");
+  const debit = field(formData, "map_debit");
 
   if (!date || !description) return undefined;
+  if (!amount && !credit && !debit) return undefined;
 
   const parsed = mappingSchema.safeParse({
     date,
     description,
     ...(amount ? { amount } : {}),
+    ...(credit ? { credit } : {}),
+    ...(debit ? { debit } : {}),
   });
 
   return parsed.success ? parsed.data : undefined;
+}
+
+/** Repassa o mapeamento vigente adiante, entre preview e confirmacao. */
+function mappingFields(mapping?: ColumnMapping): Record<string, string> {
+  if (!mapping) return {};
+
+  return {
+    map_date: String(mapping.date),
+    map_description: String(mapping.description),
+    ...(mapping.amount !== undefined ? { map_amount: String(mapping.amount) } : {}),
+    ...(mapping.credit !== undefined ? { map_credit: String(mapping.credit) } : {}),
+    ...(mapping.debit !== undefined ? { map_debit: String(mapping.debit) } : {}),
+  };
 }
 
 function toErrorMessage(error: unknown): string {
@@ -347,6 +373,7 @@ async function buildPreview(
     sheetNames: parsed.sheetNames,
     sheetName: parsed.sheetName,
     mapping: parsed.mapping,
+    mappingFields: mappingFields(parsed.mapping),
     accountHint: parsed.accountHint,
     rowsTotal: parsed.transactions.length,
     rowsNew: fresh.length,
@@ -365,6 +392,8 @@ async function buildPreview(
       negative: row.amountCents < 0,
       duplicate: duplicateHashes.has(row.dedupeHash),
     })),
-    needsMapping: parsed.transactions.length === 0 && Boolean(parsed.sampleRows),
+    // A amostra vai sempre que o formato e tabular: mesmo com deteccao
+    // automatica bem-sucedida, o usuario precisa poder corrigir a escolha.
+    needsMapping: parsed.transactions.length === 0,
   };
 }

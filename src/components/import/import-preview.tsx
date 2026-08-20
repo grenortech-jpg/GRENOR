@@ -10,6 +10,7 @@ import {
   type ImportPreview,
   type ImportState,
 } from "@/app/(app)/empresas/[id]/importar/actions";
+import { ColumnMapper } from "@/components/import/column-mapper";
 import { FormFeedback } from "@/components/forms/form-feedback";
 import { SubmitButton } from "@/components/forms/submit-button";
 import { Badge } from "@/components/ui/badge";
@@ -39,6 +40,12 @@ export function ImportPreviewPanel({ preview }: { preview: ImportPreview }) {
 
       {preview.sheetNames && preview.sheetNames.length > 1 && (
         <SheetPicker preview={preview} />
+      )}
+
+      {/* Aberto de saida quando nada foi reconhecido: sem mapeamento manual a
+          importacao nao tem como prosseguir. */}
+      {preview.sampleRows && preview.sampleRows.length > 0 && (
+        <ColumnMapper preview={preview} defaultOpen={preview.needsMapping} />
       )}
 
       <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
@@ -246,6 +253,11 @@ function ConfirmBar({ preview }: { preview: ImportPreview }) {
           {preview.separator && (
             <input type="hidden" name="separator" value={preview.separator} />
           )}
+          {/* Sem isto, confirmar reprocessaria com a deteccao automatica e
+              jogaria fora o mapeamento que o usuario acabou de corrigir. */}
+          {Object.entries(preview.mappingFields).map(([name, value]) => (
+            <input key={name} type="hidden" name={name} value={value} />
+          ))}
           <SubmitButton disabled={nothingToImport} pendingLabel="Importando…">
             {nothingToImport
               ? "Nada a importar"
