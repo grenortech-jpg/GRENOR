@@ -1,5 +1,6 @@
 import "server-only";
 
+import { cache } from "react";
 import { notFound, redirect } from "next/navigation";
 
 import type { BankAccount, Company, Period, Workspace } from "@/generated/prisma/client";
@@ -25,24 +26,32 @@ export type WorkspaceContext = {
   role: MemberRole;
 };
 
-/** Contexto do workspace do usuario, ou null se ele ainda nao tem nenhum. */
-export async function getCurrentWorkspace(): Promise<WorkspaceContext | null> {
-  const user = await requireUser();
+/**
+ * Contexto do workspace do usuario, ou null se ele ainda nao tem nenhum.
+ *
+ * Envolto em `cache()` pelo mesmo motivo de getCurrentUser: uma pagina resolve
+ * o workspace no metadata, no layout e no proprio corpo. Sem o cache sao tres
+ * consultas identicas por render.
+ */
+export const getCurrentWorkspace = cache(
+  async (): Promise<WorkspaceContext | null> => {
+    const user = await requireUser();
 
-  const membership = await prisma.workspaceMember.findFirst({
-    where: { userId: user.id },
-    include: { workspace: true },
-    orderBy: { createdAt: "asc" },
-  });
+    const membership = await prisma.workspaceMember.findFirst({
+      where: { userId: user.id },
+      include: { workspace: true },
+      orderBy: { createdAt: "asc" },
+    });
 
-  if (!membership) return null;
+    if (!membership) return null;
 
-  return {
-    userId: user.id,
-    workspace: membership.workspace,
-    role: membership.role,
-  };
-}
+    return {
+      userId: user.id,
+      workspace: membership.workspace,
+      role: membership.role,
+    };
+  },
+);
 
 /**
  * Contexto obrigatorio. Sem workspace, manda para o onboarding: e o unico
@@ -64,17 +73,20 @@ export function assertCanAdminister(context: WorkspaceContext): void {
   if (!canAdminister(context.role)) notFound();
 }
 
-export async function assertCompanyInWorkspace(
-  companyId: string,
-  context: WorkspaceContext,
-): Promise<Company> {
-  const company = await prisma.company.findFirst({
-    where: { id: companyId, workspaceId: context.workspace.id },
-  });
+/**
+ * `cache()` aqui evita a consulta dobrada entre generateMetadata e a pagina,
+ * que resolvem a mesma empresa a partir do mesmo id de URL.
+ */
+export const assertCompanyInWorkspace = cache(
+  async (companyId: string, context: WorkspaceContext): Promise<Company> => {
+    const company = await prisma.company.findFirst({
+      where: { id: companyId, workspaceId: context.workspace.id },
+    });
 
-  if (!company) notFound();
-  return company;
-}
+    if (!company) notFound();
+    return company;
+  },
+);
 
 export type AccountWithCompany = BankAccount & { company: Company };
 

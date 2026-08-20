@@ -3,7 +3,7 @@ import Link from "next/link";
 import { MainNav } from "@/components/app/main-nav";
 import { UserMenu } from "@/components/app/user-menu";
 import { Logo } from "@/components/brand/logo";
-import { displayName, requireUser } from "@/lib/auth/session";
+import { requireUser } from "@/lib/auth/session";
 
 export default async function AppLayout({ children }: LayoutProps<"/">) {
   const user = await requireUser();
@@ -22,7 +22,7 @@ export default async function AppLayout({ children }: LayoutProps<"/">) {
 
           <div className="ml-auto md:ml-0">
             <UserMenu
-              name={displayName(user)}
+              name={user.name}
               email={user.email ?? ""}
             />
           </div>

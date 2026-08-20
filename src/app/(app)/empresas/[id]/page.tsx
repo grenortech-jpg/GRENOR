@@ -8,7 +8,7 @@ import { CompanySettings } from "@/components/companies/company-settings";
 import { buttonVariants } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { canAdminister, assertCompanyInWorkspace, getWorkspaceOrThrow } from "@/lib/auth/workspace";
-import { listCompanyOverviews } from "@/lib/companies/overview";
+import { getCompanyOverview } from "@/lib/companies/overview";
 import {
   formatAmount,
   formatDate,
@@ -38,7 +38,7 @@ export default async function CompanyPage({ params }: PageProps<"/empresas/[id]"
 
   const month = currentMonth();
 
-  const [accounts, periods, overviews] = await Promise.all([
+  const [accounts, periods, overview] = await Promise.all([
     prisma.bankAccount.findMany({
       where: { companyId: company.id },
       orderBy: { createdAt: "asc" },
@@ -49,10 +49,8 @@ export default async function CompanyPage({ params }: PageProps<"/empresas/[id]"
       orderBy: [{ year: "desc" }, { month: "desc" }],
       take: 12,
     }),
-    listCompanyOverviews(context, { month }),
+    getCompanyOverview(context, company.id, month),
   ]);
-
-  const overview = overviews.find((item) => item.id === company.id);
 
   const accountViews: AccountView[] = accounts.map((account) => ({
     id: account.id,

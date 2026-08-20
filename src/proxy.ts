@@ -20,9 +20,16 @@ function isPublic(pathname: string): boolean {
 }
 
 /**
- * Renova a sessao do Supabase a cada requisicao e barra o acesso as rotas
- * privadas. Nao e a camada de autorizacao: quem valida pertencimento ao
- * workspace sao os helpers de src/lib/auth.
+ * Renova a sessao do Supabase e faz a triagem entre rotas publicas e privadas.
+ *
+ * Usa `getClaims()`, que valida a assinatura do JWT localmente com a chave
+ * publica do projeto (em cache), em vez de `getUser()`, que consulta o
+ * servidor de auth a cada requisicao. Com getUser, TODA navegacao carregava
+ * ~240ms de latencia de rede antes de a pagina comecar a renderizar.
+ *
+ * Isto e triagem, nao autorizacao. Quem estabelece a identidade de verdade sao
+ * `requireUser()` e os helpers de src/lib/auth/workspace.ts, no servidor, ja
+ * dentro da pagina ou da Server Action.
  */
 export async function proxy(request: NextRequest) {
   let response = NextResponse.next({ request });
@@ -52,20 +59,19 @@ export async function proxy(request: NextRequest) {
     },
   );
 
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
+  const { data } = await supabase.auth.getClaims();
+  const signedIn = Boolean(data?.claims?.sub);
 
   const { pathname } = request.nextUrl;
 
-  if (!user && !isPublic(pathname)) {
+  if (!signedIn && !isPublic(pathname)) {
     const url = request.nextUrl.clone();
     url.pathname = "/login";
     url.searchParams.set("redirect", pathname);
     return NextResponse.redirect(url);
   }
 
-  if (user && AUTH_PREFIXES.some((prefix) => pathname.startsWith(prefix))) {
+  if (signedIn && AUTH_PREFIXES.some((prefix) => pathname.startsWith(prefix))) {
     const url = request.nextUrl.clone();
     url.pathname = "/app";
     url.search = "";
@@ -78,8 +84,10 @@ export async function proxy(request: NextRequest) {
 export const config = {
   matcher: [
     /*
-     * Tudo, exceto arquivos estaticos e imagens otimizadas.
+     * Tudo, exceto arquivos estaticos, imagens otimizadas e os assets do
+     * proprio Next em desenvolvimento. Rodar o proxy neles so acrescenta
+     * latencia a cada request do navegador.
      */
-    "/((?!_next/static|_next/image|favicon.ico|.*\\.(?:svg|png|jpg|jpeg|gif|webp|ico)$).*)",
+    "/((?!_next/static|_next/image|_next/webpack-hmr|favicon.ico|.*\\.(?:svg|png|jpg|jpeg|gif|webp|ico|css|js|map|woff2?)$).*)",
   ],
 };

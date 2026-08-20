@@ -32,12 +32,32 @@ export const STATUS_LABELS: Record<CompanyMonthStatus, string> = {
 };
 
 /**
+ * Situacao do mes de UMA empresa.
+ *
+ * Existe porque a pagina da empresa chamava listCompanyOverviews e varria o
+ * workspace inteiro para exibir um unico card - custo que crescia com o numero
+ * de clientes do escritorio, sem nenhum motivo.
+ */
+export async function getCompanyOverview(
+  context: WorkspaceContext,
+  companyId: string,
+  month: YearMonth = currentMonth(),
+): Promise<CompanyOverview | null> {
+  const [overview] = await listCompanyOverviews(context, {
+    month,
+    companyId,
+  });
+
+  return overview ?? null;
+}
+
+/**
  * Grid do workspace. Faz uma consulta por agregacao em vez de uma por empresa:
  * um BPO com 80 clientes nao pode disparar 240 queries para desenhar a tela.
  */
 export async function listCompanyOverviews(
   context: WorkspaceContext,
-  options: { search?: string; month?: YearMonth } = {},
+  options: { search?: string; month?: YearMonth; companyId?: string } = {},
 ): Promise<CompanyOverview[]> {
   const month = options.month ?? currentMonth();
   const search = options.search?.trim();
@@ -45,6 +65,7 @@ export async function listCompanyOverviews(
   const companies = await prisma.company.findMany({
     where: {
       workspaceId: context.workspace.id,
+      ...(options.companyId ? { id: options.companyId } : {}),
       ...(search
         ? {
             OR: [
@@ -62,7 +83,7 @@ export async function listCompanyOverviews(
 
   const companyIds = companies.map((company) => company.id);
 
-  const [periods, transactions, uncategorized] = await Promise.all([
+  const [periods, transactions, uncategorized, accounts] = await Promise.all([
     prisma.period.findMany({
       where: {
         companyId: { in: companyIds },
@@ -87,12 +108,11 @@ export async function listCompanyOverviews(
       },
       _count: { _all: true },
     }),
+    prisma.bankAccount.findMany({
+      where: { companyId: { in: companyIds } },
+      select: { id: true, companyId: true },
+    }),
   ]);
-
-  const accounts = await prisma.bankAccount.findMany({
-    where: { companyId: { in: companyIds } },
-    select: { id: true, companyId: true },
-  });
 
   const companyByAccount = new Map(
     accounts.map((account) => [account.id, account.companyId]),
