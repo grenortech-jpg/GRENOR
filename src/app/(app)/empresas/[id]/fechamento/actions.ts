@@ -153,3 +153,89 @@ export async function reopenPeriodAction(
       "Período reaberto. Depois de ajustar, feche de novo para atualizar os números do relatório.",
   };
 }
+
+// ---------------------------------------------------------------------------
+// Compartilhamento (Secao 7)
+// ---------------------------------------------------------------------------
+
+/**
+ * Liga ou desliga o link publico do relatorio.
+ *
+ * O token e gerado na criacao do Report e nao muda ao desligar: religar
+ * reaproveita o mesmo endereco, para quem ja tem o link nao perder o acesso a
+ * troco de nada. Quem quiser invalidar de vez usa a rotacao abaixo.
+ */
+export async function toggleShareAction(
+  _prevState: ClosingState,
+  formData: FormData,
+): Promise<ClosingState> {
+  const context = await getWorkspaceOrThrow();
+
+  const companyId = parseId(formData, "companyId");
+  if (!companyId.success) return { error: firstIssue(companyId.error) };
+  const company = await assertCompanyInWorkspace(companyId.data, context);
+
+  const periodId = parseId(formData, "periodId");
+  if (!periodId.success) return { error: firstIssue(periodId.error) };
+
+  const period = await prisma.period.findFirst({
+    where: { id: periodId.data, company: { workspaceId: context.workspace.id } },
+    include: { report: true },
+  });
+
+  if (!period?.report) {
+    return { error: "Gere o relatório antes de compartilhar." };
+  }
+
+  if (period.status !== "CLOSED") {
+    return {
+      error: "Só é possível compartilhar um período fechado.",
+    };
+  }
+
+  const enabled = field(formData, "enabled") === "true";
+
+  await prisma.report.update({
+    where: { id: period.report.id },
+    data: { shareEnabled: enabled },
+  });
+
+  revalidatePath(`/empresas/${company.id}/fechamento`);
+
+  return {
+    success: enabled
+      ? "Link ativado. Qualquer pessoa com o endereço vê o relatório."
+      : "Link desativado. O endereço deixa de funcionar imediatamente.",
+  };
+}
+
+/** Gera um token novo, invalidando qualquer link ja distribuido. */
+export async function rotateShareTokenAction(
+  _prevState: ClosingState,
+  formData: FormData,
+): Promise<ClosingState> {
+  const context = await getWorkspaceOrThrow();
+
+  const companyId = parseId(formData, "companyId");
+  if (!companyId.success) return { error: firstIssue(companyId.error) };
+  const company = await assertCompanyInWorkspace(companyId.data, context);
+
+  const periodId = parseId(formData, "periodId");
+  if (!periodId.success) return { error: firstIssue(periodId.error) };
+
+  const period = await prisma.period.findFirst({
+    where: { id: periodId.data, company: { workspaceId: context.workspace.id } },
+    include: { report: true },
+  });
+
+  if (!period?.report) return { error: "Relatório não encontrado." };
+
+  await prisma.report.update({
+    where: { id: period.report.id },
+    data: { shareToken: crypto.randomUUID() },
+  });
+
+  revalidatePath(`/empresas/${company.id}/fechamento`);
+
+  return { success: "Novo link gerado. O anterior deixou de funcionar." };
+}

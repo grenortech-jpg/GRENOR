@@ -336,6 +336,7 @@ Cada fase termina com o sistema rodando e testavel. Commits pequenos e frequente
 depende de credito na conta Anthropic; AI_ENABLED esta false por decisao do
 usuario ate haver cliente pagante).
 **Fase 5 - DRE e dashboard: concluida.**
+**Fase 6 - Relatorio PDF e link publico: concluida.**
 Demais fases: pendentes.
 
 ### Comandos
@@ -432,6 +433,19 @@ Versoes instaladas ficaram acima do previsto na Secao 2. Diferencas que importam
   saldo inicial e o da vespera do primeiro extrato; contar lancamentos
   anteriores somaria o mesmo dinheiro duas vezes. O checklist do fechamento
   avisa quando existem lancamentos anteriores - sinal de data mal cadastrada.
+- **`react-dom/server` e proibido no App Router do Next.** Por isso o relatorio
+  e gerado por template de string (`reports/report-html.ts`), e nao por
+  componente React. O ganho colateral: PDF e link publico saem exatamente da
+  mesma funcao, sem chance de divergirem, e o HTML pode ser testado.
+- **Todo texto vindo do banco passa por `escapeHtml` no relatorio.** Descricao
+  de lancamento vem de arquivo enviado pelo usuario e o link publico abre na
+  maquina do cliente do escritorio.
+- **Grupo de despesa aparece em modulo; os demais, com sinal.** O rotulo dos
+  grupos 2 a 6 ja carrega o "(-)". Em "Movimentacoes societarias", esconder o
+  sinal faz o leitor somar o que era saida.
+- **PDF: `page.setContent`, nunca navegacao.** O gerador nao faz requisicao de
+  volta para a propria aplicacao, nao depende de o relatorio estar publicado e
+  nao cria URL interna a proteger.
 - **Nada de estado mutavel em nivel de modulo em Server Components.** E
   compartilhado entre requisicoes concorrentes e vaza dados de um tenant no
   render de outro.
@@ -457,6 +471,8 @@ src/
       empresas/[id]/importar/         upload, preview, mapeamento de colunas
       empresas/[id]/conciliacao/      tabela do periodo, regras, transferencias
       empresas/[id]/fechamento/       DRE, indicadores, graficos, fechamento
+    api/relatorio/[periodId]/pdf/     geracao do PDF (nodejs, maxDuration 60)
+    r/[shareToken]/                   relatorio publico, sem login
       configuracoes/regras/           CRUD das regras do workspace
       onboarding/                     wizard de 4 passos
       actions.ts                      CRUD de workspace, empresa e conta
@@ -481,6 +497,10 @@ src/
     ai/{client,prompt,categorize}.ts  camada 2: IA em lote, limites e custo
     reports/dre.ts                    calculo da DRE, puro e testavel
     reports/load.ts                   carga dos dados do periodo
+    reports/report-html.ts            o relatorio, como HTML (PDF e link)
+    reports/svg-charts.ts             graficos sem JavaScript
+    reports/pdf.ts                    Chromium serverless / Chrome local
+    reports/storage.ts                PDFs no bucket privado, URL assinada
     rules/engine.ts                   motor de regras e validacao de padrao
     transactions/transfers.ts         pares de transferencia (Secao 5.4)
     categories/list.ts                plano de contas do workspace

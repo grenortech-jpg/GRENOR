@@ -13,6 +13,20 @@ import { cn } from "@/lib/utils";
  * lista unica de linhas em vez de um map por grupo.
  */
 
+
+/**
+ * Grupos cujo rotulo ja carrega o "(-)" aparecem em modulo, como o contador
+ * le. Os demais precisam do sinal: "Movimentacoes societarias 1.983,04" sem
+ * sinal e lido como entrada, quando o grupo foi saida liquida de 1.983,04.
+ */
+const MODULE_GROUPS = new Set([
+  "SALES_TAXES",
+  "VARIABLE_COSTS",
+  "PERSONNEL",
+  "OPERATING_EXPENSES",
+  "FINANCIAL_EXPENSES",
+]);
+
 type Row =
   | { kind: "group"; group: DreGroup }
   | { kind: "total"; total: DreTotal };
@@ -81,6 +95,8 @@ export function DreTable({
 }
 
 function GroupBlock({ group }: { group: DreGroup }) {
+  const signed = !MODULE_GROUPS.has(group.group);
+
   return (
     <>
       <tr className="border-t bg-muted/30">
@@ -92,8 +108,8 @@ function GroupBlock({ group }: { group: DreGroup }) {
             </span>
           )}
         </th>
-        <Amount cents={group.currentCents} bold />
-        <Amount cents={group.previousCents} bold muted />
+        <Amount cents={group.currentCents} bold signed={signed} />
+        <Amount cents={group.previousCents} bold muted signed={signed} />
         <Variation value={group.variationPct} />
       </tr>
 
@@ -102,8 +118,8 @@ function GroupBlock({ group }: { group: DreGroup }) {
         .map((line) => (
           <tr key={line.categoryId} className="border-t">
             <td className="px-4 py-1.5 pl-8 text-muted-foreground">{line.name}</td>
-            <Amount cents={line.currentCents} />
-            <Amount cents={line.previousCents} muted />
+            <Amount cents={line.currentCents} signed={signed} />
+            <Amount cents={line.previousCents} muted signed={signed} />
             <Variation value={line.variationPct} />
           </tr>
         ))}

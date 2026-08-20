@@ -13,6 +13,7 @@ import {
 } from "@/components/reports/closing-panel";
 import { DreTable } from "@/components/reports/dre-table";
 import { Indicators } from "@/components/reports/indicators";
+import { SharePanel } from "@/components/reports/share-panel";
 import { assertCompanyInWorkspace, getWorkspaceOrThrow } from "@/lib/auth/workspace";
 import { formatAmount, formatDate, formatMonth } from "@/lib/format";
 import {
@@ -25,6 +26,7 @@ import {
 } from "@/lib/period";
 import { prisma } from "@/lib/prisma";
 import { loadPeriodReport } from "@/lib/reports/load";
+import { getSiteUrl } from "@/lib/site-url";
 import { cn } from "@/lib/utils";
 
 export const metadata: Metadata = { title: "Fechamento" };
@@ -61,6 +63,7 @@ export default async function ClosingPage({
           month: month.month,
         },
       },
+      include: { report: true },
     }),
     prisma.transaction.count({
       where: { account: { companyId: company.id }, date: { gte: start, lt: end } },
@@ -83,6 +86,11 @@ export default async function ClosingPage({
     closed: period?.status === "CLOSED",
     closedAt: period?.closedAt ? formatDate(period.closedAt) : null,
   };
+
+  const siteUrl = await getSiteUrl();
+  const shareUrl = period?.report
+    ? `${siteUrl}/r/${period.report.shareToken}`
+    : null;
 
   const monthLabel = formatMonth(month.year, month.month);
   const priorLabel = formatMonth(prior.year, prior.month);
@@ -130,6 +138,14 @@ export default async function ClosingPage({
         monthKey={monthKey}
         monthLabel={monthLabel}
         checklist={checklist}
+      />
+
+      <SharePanel
+        companyId={company.id}
+        periodId={period?.id ?? null}
+        shareUrl={shareUrl}
+        shareEnabled={period?.report?.shareEnabled ?? false}
+        closed={period?.status === "CLOSED"}
       />
 
       {totalCount === 0 ? (
