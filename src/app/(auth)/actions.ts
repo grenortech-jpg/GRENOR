@@ -3,6 +3,7 @@
 import { redirect } from "next/navigation";
 import { z } from "zod";
 
+import { isSupabaseConfigured } from "@/lib/env";
 import { getSiteUrl } from "@/lib/site-url";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
 
@@ -50,9 +51,16 @@ function firstIssue(error: z.ZodError): string {
   return error.issues[0]?.message ?? "Dados inválidos.";
 }
 
-/** Traduz os erros mais comuns do Supabase Auth. */
-function translateAuthError(message: string): string {
+/**
+ * Traduz os erros do Supabase Auth para o usuario, sempre registrando o erro
+ * original no log do servidor: sem isso uma falha vira uma mensagem generica
+ * impossivel de diagnosticar.
+ */
+function translateAuthError(context: string, message: string): string {
+  console.error(`[auth:${context}] ${message}`);
+
   const normalized = message.toLowerCase();
+
   if (normalized.includes("invalid login credentials")) {
     return "E-mail ou senha incorretos.";
   }
@@ -65,13 +73,36 @@ function translateAuthError(message: string): string {
   if (normalized.includes("rate limit") || normalized.includes("too many")) {
     return "Muitas tentativas. Aguarde alguns minutos e tente de novo.";
   }
+  if (
+    normalized.includes("fetch failed") ||
+    normalized.includes("failed to fetch") ||
+    normalized.includes("getaddrinfo") ||
+    normalized.includes("enotfound") ||
+    normalized.includes("econnrefused") ||
+    normalized.includes("network")
+  ) {
+    return "Não foi possível falar com o Supabase. Verifique NEXT_PUBLIC_SUPABASE_URL e a sua conexão.";
+  }
+
   return "Não foi possível concluir. Tente novamente em instantes.";
+}
+
+/** Barra a operacao quando o .env ainda esta com os valores de exemplo. */
+function configurationError(): AuthFormState | null {
+  if (isSupabaseConfigured()) return null;
+  return {
+    error:
+      "Supabase não configurado. Preencha o .env com as chaves do seu projeto (veja o README) e reinicie o servidor.",
+  };
 }
 
 export async function signInAction(
   _prevState: AuthFormState,
   formData: FormData,
 ): Promise<AuthFormState> {
+  const misconfigured = configurationError();
+  if (misconfigured) return misconfigured;
+
   const parsed = signInSchema.safeParse({
     email: formData.get("email"),
     password: formData.get("password"),
@@ -86,7 +117,7 @@ export async function signInAction(
     password: parsed.data.password,
   });
 
-  if (error) return { error: translateAuthError(error.message) };
+  if (error) return { error: translateAuthError("signIn", error.message) };
 
   const target = parsed.data.redirect;
   redirect(target && target.startsWith("/") ? target : "/app");
@@ -96,6 +127,9 @@ export async function signUpAction(
   _prevState: AuthFormState,
   formData: FormData,
 ): Promise<AuthFormState> {
+  const misconfigured = configurationError();
+  if (misconfigured) return misconfigured;
+
   const parsed = signUpSchema.safeParse({
     name: formData.get("name"),
     email: formData.get("email"),
@@ -116,7 +150,7 @@ export async function signUpAction(
     },
   });
 
-  if (error) return { error: translateAuthError(error.message) };
+  if (error) return { error: translateAuthError("signUp", error.message) };
 
   // Com confirmacao de e-mail ligada no Supabase nao ha sessao ainda.
   if (!data.session) {
@@ -133,6 +167,9 @@ export async function requestPasswordResetAction(
   _prevState: AuthFormState,
   formData: FormData,
 ): Promise<AuthFormState> {
+  const misconfigured = configurationError();
+  if (misconfigured) return misconfigured;
+
   const parsed = resetRequestSchema.safeParse({ email: formData.get("email") });
   if (!parsed.success) return { error: firstIssue(parsed.error) };
 
@@ -154,6 +191,9 @@ export async function updatePasswordAction(
   _prevState: AuthFormState,
   formData: FormData,
 ): Promise<AuthFormState> {
+  const misconfigured = configurationError();
+  if (misconfigured) return misconfigured;
+
   const parsed = newPasswordSchema.safeParse({
     password: formData.get("password"),
     passwordConfirmation: formData.get("passwordConfirmation"),
@@ -176,12 +216,16 @@ export async function updatePasswordAction(
     password: parsed.data.password,
   });
 
-  if (error) return { error: translateAuthError(error.message) };
+  if (error) return { error: translateAuthError("updatePassword", error.message) };
 
   redirect("/app");
 }
 
 export async function signInWithGoogleAction(formData: FormData) {
+  if (!isSupabaseConfigured()) {
+    redirect("/login?erro=config");
+  }
+
   const supabase = await createSupabaseServerClient();
   const siteUrl = await getSiteUrl();
 

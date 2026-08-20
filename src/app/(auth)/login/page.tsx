@@ -18,6 +18,8 @@ const ERROR_MESSAGES: Record<string, string> = {
   auth: "Não foi possível concluir a autenticação. Tente novamente.",
   google: "Falha ao conectar com o Google. Tente novamente.",
   link: "Este link expirou ou já foi usado. Peça um novo.",
+  config:
+    "Supabase não configurado. Preencha o .env com as chaves do seu projeto (veja o README) e reinicie o servidor.",
 };
 
 export default async function LoginPage({ searchParams }: PageProps<"/login">) {

@@ -1,5 +1,6 @@
 import Link from "next/link";
 
+import { SetupNotice } from "@/components/auth/setup-notice";
 import { Logo } from "@/components/brand/logo";
 
 export default function AuthLayout({ children }: LayoutProps<"/">) {
@@ -12,7 +13,10 @@ export default function AuthLayout({ children }: LayoutProps<"/">) {
       </header>
 
       <main className="flex flex-1 items-start justify-center px-6 pb-16">
-        <div className="w-full max-w-sm">{children}</div>
+        <div className="w-full max-w-sm">
+          <SetupNotice />
+          {children}
+        </div>
       </main>
 
       <footer className="px-6 pb-8 text-center text-xs text-muted-foreground">

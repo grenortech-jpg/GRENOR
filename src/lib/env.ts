@@ -69,3 +69,18 @@ export const publicEnv = {
 export function isAiEnabled(): boolean {
   return process.env.AI_ENABLED === "true" && Boolean(process.env.ANTHROPIC_API_KEY);
 }
+
+/**
+ * Detecta o .env ainda com os valores de exemplo. Sem isso, qualquer tentativa
+ * de login ou cadastro falha por rede e a causa fica invisivel na interface.
+ */
+export function isSupabaseConfigured(): boolean {
+  const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
+  const anonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
+
+  if (!url || !anonKey) return false;
+  if (url.includes("SEU-PROJETO")) return false;
+  if (anonKey.startsWith("sua-")) return false;
+
+  return true;
+}
