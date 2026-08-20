@@ -46,10 +46,17 @@ function matches(header: string, candidates: string[]): boolean {
   );
 }
 
-/** Linha que parece cabecalho: tem texto e nenhuma data valida. */
+/**
+ * Linha que antecede a tabela: tem conteudo e nenhuma data valida.
+ *
+ * Cobre tanto a linha de titulos ("Data;Historico;Valor") quanto o cabecalho
+ * do banco, que costuma vir em UMA celula so ("BANCO INTER S.A. - 077"). Exigir
+ * duas celulas aqui fazia a busca pela linha de titulos comecar do zero e o
+ * mapeamento por nome de coluna nunca acontecer.
+ */
 export function isHeaderRow(row: string[]): boolean {
   const filled = row.filter((cell) => cell.trim());
-  if (filled.length < 2) return false;
+  if (filled.length === 0) return false;
   return !filled.some((cell) => looksLikeDate(cell));
 }
 
@@ -126,11 +133,64 @@ function detectMappingFromData(rows: string[][]): ColumnMapping | null {
   if (date === -1) return null;
 
   const description = best(textCounts, [date]);
-  const amount = best(moneyCounts, [date, description]);
+  if (description === -1) return null;
 
-  if (description === -1 || amount === -1) return null;
+  const moneyColumns: number[] = [];
+  moneyCounts.forEach((count, index) => {
+    if (count > 0 && index !== date && index !== description) {
+      moneyColumns.push(index);
+    }
+  });
+
+  if (moneyColumns.length === 0) return null;
+
+  // Extrato brasileiro quase sempre traz uma coluna de saldo ao lado da de
+  // valor, e as duas parecem dinheiro. Escolher errado inverte o extrato
+  // inteiro: o saldo corrido vira o valor do lancamento. Descarta-se a coluna
+  // que se comporta como saldo acumulado.
+  const balanceColumns = new Set(
+    moneyColumns.filter((candidate) =>
+      moneyColumns.some(
+        (other) => other !== candidate && isRunningBalance(dataRows, candidate, other),
+      ),
+    ),
+  );
+
+  const usable = moneyColumns.filter((column) => !balanceColumns.has(column));
+  const amount = usable.length > 0 ? usable[0] : moneyColumns[0];
 
   return { date, description, amount };
+}
+
+/**
+ * A coluna `balance` e o acumulado da coluna `amount`?
+ *
+ * Verdadeiro quando, na maioria das linhas consecutivas, o saldo cresce
+ * exatamente o valor do lancamento. Exige uma folga de um centavo para
+ * absorver arredondamento do exportador.
+ */
+function isRunningBalance(
+  rows: string[][],
+  balance: number,
+  amount: number,
+): boolean {
+  let checked = 0;
+  let matched = 0;
+
+  for (let index = 1; index < rows.length; index += 1) {
+    const previous = parseMoneyToCents(rows[index - 1][balance] ?? "");
+    const current = parseMoneyToCents(rows[index][balance] ?? "");
+    const movement = parseMoneyToCents(rows[index][amount] ?? "");
+
+    if (previous === null || current === null || movement === null) continue;
+
+    checked += 1;
+    if (Math.abs(current - previous - movement) <= 1) matched += 1;
+  }
+
+  // Poucas linhas comparaveis nao autorizam a conclusao.
+  if (checked < 3) return false;
+  return matched / checked >= 0.8;
 }
 
 /** Converte linhas cruas em transacoes, descartando o que nao e lancamento. */
@@ -155,6 +215,12 @@ export function rowsToTransactions(
     if (!date) return;
 
     const description = (row[mapping.description] ?? "").trim();
+
+    // Linhas de saldo tem data e valor, entao passam pela heuristica da data.
+    // Mas saldo nao e movimento: importar "SALDO ANTERIOR 50.000,00" injeta uma
+    // receita fantasma que contamina a DRE do mes inteiro.
+    if (isBalanceMarker(description)) return;
+
     const amountCents = readAmount(row, mapping);
 
     if (amountCents === null) {
@@ -183,6 +249,22 @@ export function rowsToTransactions(
   });
 
   return { transactions, warnings };
+}
+
+/**
+ * "SALDO ANTERIOR", "SALDO FINAL", "SALDO DO DIA", "SALDO EM 31/08" e afins.
+ *
+ * So marca a linha quando a descricao COMECA com saldo: "PAGTO SALDO
+ * DEVEDOR CARTAO" e um lancamento de verdade e precisa entrar.
+ */
+function isBalanceMarker(description: string): boolean {
+  const normalized = description
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .toUpperCase()
+    .trim();
+
+  return /^SALDO\b/.test(normalized);
 }
 
 function parseSerialCell(value: string): Date | null {
