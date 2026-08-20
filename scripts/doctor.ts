@@ -24,6 +24,12 @@ function fail(label: string, hint: string) {
   console.log(`      ${hint}`);
 }
 
+/** Nao impede a aplicacao de rodar, mas atrapalha o desenvolvimento. */
+function warn(label: string, hint: string) {
+  console.log(`  ! ${label}`);
+  console.log(`      ${hint}`);
+}
+
 function isPlaceholder(value: string | undefined): boolean {
   if (!value) return true;
   return (
@@ -106,14 +112,19 @@ async function checkSupabase() {
         "Provider Google",
         settings.external?.google ? "habilitado" : "desabilitado",
       );
-      ok(
-        "Confirmacao de e-mail",
-        settings.mailer_autoconfirm ? "desligada (autoconfirm)" : "exigida",
-      );
+      if (settings.mailer_autoconfirm) {
+        ok("Confirmacao de e-mail", "desligada (autoconfirm)");
+      } else {
+        warn(
+          "Confirmacao de e-mail exigida",
+          "A conta e criada mas fica pendente, e o SMTP embutido do Supabase quase nunca entrega. " +
+            "Para testar cadastro: Authentication > Sign In / Providers > Email > desligar Confirm email.",
+        );
+      }
     } else if (response.status === 401) {
       fail(
-        "Chave anon rejeitada",
-        "Confira NEXT_PUBLIC_SUPABASE_ANON_KEY em Project Settings > API.",
+        "Chave publica rejeitada",
+        "NEXT_PUBLIC_SUPABASE_ANON_KEY invalida ou revogada. Copie de novo em Project Settings > API Keys > Publishable key.",
       );
     } else {
       fail(
@@ -124,6 +135,46 @@ async function checkSupabase() {
   } catch (error) {
     fail(
       "Nao foi possivel alcancar o Supabase",
+      error instanceof Error ? error.message : String(error),
+    );
+  }
+
+  await checkSecretKey();
+}
+
+/**
+ * A chave secreta so e exercitada em Storage e operacoes administrativas, que
+ * chegam la na frente. Sem esta checagem, uma chave revogada passa despercebida
+ * ate falhar em producao.
+ */
+async function checkSecretKey() {
+  const url = process.env.NEXT_PUBLIC_SUPABASE_URL!;
+  const secret = process.env.SUPABASE_SERVICE_ROLE_KEY;
+
+  if (isPlaceholder(secret)) return;
+
+  try {
+    const response = await fetch(`${url}/auth/v1/admin/users?per_page=1`, {
+      headers: { apikey: secret!, Authorization: `Bearer ${secret}` },
+      signal: AbortSignal.timeout(10_000),
+    });
+
+    if (response.ok) {
+      ok("Chave secreta valida");
+    } else if (response.status === 401 || response.status === 403) {
+      fail(
+        "Chave secreta rejeitada",
+        "SUPABASE_SERVICE_ROLE_KEY invalida ou revogada. Copie a atual em Project Settings > API Keys > Secret key.",
+      );
+    } else {
+      fail(
+        `Chave secreta: resposta ${response.status}`,
+        "Confira SUPABASE_SERVICE_ROLE_KEY.",
+      );
+    }
+  } catch (error) {
+    fail(
+      "Falha ao validar a chave secreta",
       error instanceof Error ? error.message : String(error),
     );
   }
