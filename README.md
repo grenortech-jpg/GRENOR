@@ -22,7 +22,10 @@ npm install
 
 Crie um projeto e anote, em **Project Settings**:
 
-- **API** → `Project URL` e `anon public` e `service_role`
+- **API Keys** → a `Publishable key` (`sb_publishable_…`) e a `Secret key`
+  (`sb_secret_…`). Em projetos antigos, elas se chamam `anon public` e
+  `service_role` — servem igualmente.
+- **Data API** → o `Project URL`
 - **Database → Connection string** → as strings do *Transaction pooler* (porta 6543)
   e da *conexão direta* / *Session pooler* (porta 5432)
 
@@ -37,8 +40,8 @@ Preencha:
 | Variável | Para quê |
 |---|---|
 | `NEXT_PUBLIC_SUPABASE_URL` | URL do projeto |
-| `NEXT_PUBLIC_SUPABASE_ANON_KEY` | Chave pública (browser) |
-| `SUPABASE_SERVICE_ROLE_KEY` | Chave privilegiada (só no servidor) |
+| `NEXT_PUBLIC_SUPABASE_ANON_KEY` | Chave pública / publishable (browser) |
+| `SUPABASE_SERVICE_ROLE_KEY` | Chave secreta / service_role (só no servidor) |
 | `DATABASE_URL` | Pooler, porta 6543 — runtime da aplicação |
 | `DIRECT_URL` | Conexão direta, porta 5432 — CLI do Prisma |
 | `NEXT_PUBLIC_SITE_URL` | `http://localhost:3000` em desenvolvimento |

@@ -37,9 +37,15 @@ function checkEnv(): boolean {
   console.log("\nVariaveis de ambiente");
 
   const required = [
-    ["NEXT_PUBLIC_SUPABASE_URL", "Project Settings > API > Project URL"],
-    ["NEXT_PUBLIC_SUPABASE_ANON_KEY", "Project Settings > API > anon public"],
-    ["SUPABASE_SERVICE_ROLE_KEY", "Project Settings > API > service_role"],
+    ["NEXT_PUBLIC_SUPABASE_URL", "Project Settings > Data API > Project URL"],
+    [
+      "NEXT_PUBLIC_SUPABASE_ANON_KEY",
+      "Project Settings > API Keys > Publishable key (sb_publishable_...)",
+    ],
+    [
+      "SUPABASE_SERVICE_ROLE_KEY",
+      "Project Settings > API Keys > Secret key (sb_secret_...)",
+    ],
     ["DATABASE_URL", "Database > Connection string > Transaction pooler (6543)"],
     ["DIRECT_URL", "Database > Connection string > conexao direta (5432)"],
   ] as const;
