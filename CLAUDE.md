@@ -333,7 +333,9 @@ Cada fase termina com o sistema rodando e testavel. Commits pequenos e frequente
 **Fase 2 - Importacao: concluida.**
 **Fase 3 - Categorizacao por regras: concluida.**
 **Fase 4 - Categorizacao por IA: concluida** (falta exercitar contra a API real:
-depende de ANTHROPIC_API_KEY).
+depende de credito na conta Anthropic; AI_ENABLED esta false por decisao do
+usuario ate haver cliente pagante).
+**Fase 5 - DRE e dashboard: concluida.**
 Demais fases: pendentes.
 
 ### Comandos
@@ -420,6 +422,19 @@ Versoes instaladas ficaram acima do previsto na Secao 2. Diferencas que importam
   para dentro da DRE.
 - **A IA valida o que volta.** Ids de transacao fora do lote e ids de categoria
   fora do workspace sao descartados antes de gravar: o modelo pode inventar id.
+- **Todo total da DRE e SOMA de valores com sinal, nunca subtracao manual.** A
+  Secao 6 escreve "1-2-3-4-5-6" lendo os grupos de despesa como positivos a
+  subtrair; somar valores ja sinalizados da o mesmo numero e continua correto
+  quando um estorno positivo cai dentro de um grupo de despesa.
+- **Variacao percentual contra zero e `null`, nao infinito.** "De 0 para 5.000"
+  nao e aumento de infinito por cento; a interface mostra um traco.
+- **Saldo consolidado conta o que veio DEPOIS da data do saldo inicial.** O
+  saldo inicial e o da vespera do primeiro extrato; contar lancamentos
+  anteriores somaria o mesmo dinheiro duas vezes. O checklist do fechamento
+  avisa quando existem lancamentos anteriores - sinal de data mal cadastrada.
+- **Nada de estado mutavel em nivel de modulo em Server Components.** E
+  compartilhado entre requisicoes concorrentes e vaza dados de um tenant no
+  render de outro.
 - **Falha de IA e silenciosa por design** (Secao 8.1). Lote que estoura timeout
   ou devolve JSON invalido duas vezes fica sem categoria e a execucao segue nos
   demais.
@@ -441,6 +456,7 @@ src/
       configuracoes/                  workspace, membros, plano de contas
       empresas/[id]/importar/         upload, preview, mapeamento de colunas
       empresas/[id]/conciliacao/      tabela do periodo, regras, transferencias
+      empresas/[id]/fechamento/       DRE, indicadores, graficos, fechamento
       configuracoes/regras/           CRUD das regras do workspace
       onboarding/                     wizard de 4 passos
       actions.ts                      CRUD de workspace, empresa e conta
@@ -463,6 +479,8 @@ src/
       normalize.ts dedupe.ts          dedupeHash e separacao de duplicatas
       storage.ts                      bucket privado de extratos
     ai/{client,prompt,categorize}.ts  camada 2: IA em lote, limites e custo
+    reports/dre.ts                    calculo da DRE, puro e testavel
+    reports/load.ts                   carga dos dados do periodo
     rules/engine.ts                   motor de regras e validacao de padrao
     transactions/transfers.ts         pares de transferencia (Secao 5.4)
     categories/list.ts                plano de contas do workspace
