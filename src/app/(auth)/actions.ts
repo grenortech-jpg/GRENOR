@@ -1,8 +1,15 @@
 "use server";
 
 import { redirect } from "next/navigation";
-import { z } from "zod";
-
+import {
+  field,
+  firstIssue,
+  parseNewPassword,
+  parseResetRequest,
+  parseSignIn,
+  parseSignUp,
+  safeRedirect,
+} from "@/lib/auth/forms";
 import { isSupabaseConfigured } from "@/lib/env";
 import { getSiteUrl } from "@/lib/site-url";
 import { isOAuthProviderEnabled } from "@/lib/supabase/auth-settings";
@@ -12,45 +19,6 @@ export type AuthFormState = {
   error?: string;
   success?: string;
 };
-
-const emailSchema = z
-  .string()
-  .trim()
-  .min(1, "Informe o e-mail.")
-  .email("E-mail inválido.");
-
-const passwordSchema = z
-  .string()
-  .min(8, "A senha precisa ter ao menos 8 caracteres.");
-
-const signInSchema = z.object({
-  email: emailSchema,
-  password: z.string().min(1, "Informe a senha."),
-  redirect: z.string().optional(),
-});
-
-const signUpSchema = z.object({
-  name: z.string().trim().min(2, "Informe seu nome."),
-  email: emailSchema,
-  password: passwordSchema,
-});
-
-const resetRequestSchema = z.object({ email: emailSchema });
-
-const newPasswordSchema = z
-  .object({
-    password: passwordSchema,
-    passwordConfirmation: z.string(),
-  })
-  .refine((data) => data.password === data.passwordConfirmation, {
-    message: "As senhas não conferem.",
-    path: ["passwordConfirmation"],
-  });
-
-/** Primeira mensagem de erro do Zod, para exibir no formulario. */
-function firstIssue(error: z.ZodError): string {
-  return error.issues[0]?.message ?? "Dados inválidos.";
-}
 
 /**
  * Traduz os erros do Supabase Auth para o usuario, sempre registrando o erro
@@ -104,11 +72,7 @@ export async function signInAction(
   const misconfigured = configurationError();
   if (misconfigured) return misconfigured;
 
-  const parsed = signInSchema.safeParse({
-    email: formData.get("email"),
-    password: formData.get("password"),
-    redirect: formData.get("redirect"),
-  });
+  const parsed = parseSignIn(formData);
 
   if (!parsed.success) return { error: firstIssue(parsed.error) };
 
@@ -120,8 +84,7 @@ export async function signInAction(
 
   if (error) return { error: translateAuthError("signIn", error.message) };
 
-  const target = parsed.data.redirect;
-  redirect(target && target.startsWith("/") ? target : "/app");
+  redirect(safeRedirect(parsed.data.redirect, "/app"));
 }
 
 export async function signUpAction(
@@ -131,11 +94,7 @@ export async function signUpAction(
   const misconfigured = configurationError();
   if (misconfigured) return misconfigured;
 
-  const parsed = signUpSchema.safeParse({
-    name: formData.get("name"),
-    email: formData.get("email"),
-    password: formData.get("password"),
-  });
+  const parsed = parseSignUp(formData);
 
   if (!parsed.success) return { error: firstIssue(parsed.error) };
 
@@ -171,7 +130,7 @@ export async function requestPasswordResetAction(
   const misconfigured = configurationError();
   if (misconfigured) return misconfigured;
 
-  const parsed = resetRequestSchema.safeParse({ email: formData.get("email") });
+  const parsed = parseResetRequest(formData);
   if (!parsed.success) return { error: firstIssue(parsed.error) };
 
   const supabase = await createSupabaseServerClient();
@@ -195,10 +154,7 @@ export async function updatePasswordAction(
   const misconfigured = configurationError();
   if (misconfigured) return misconfigured;
 
-  const parsed = newPasswordSchema.safeParse({
-    password: formData.get("password"),
-    passwordConfirmation: formData.get("passwordConfirmation"),
-  });
+  const parsed = parseNewPassword(formData);
 
   if (!parsed.success) return { error: firstIssue(parsed.error) };
 
@@ -236,9 +192,7 @@ export async function signInWithGoogleAction(formData: FormData) {
   const supabase = await createSupabaseServerClient();
   const siteUrl = await getSiteUrl();
 
-  const target = formData.get("redirect");
-  const next =
-    typeof target === "string" && target.startsWith("/") ? target : "/app";
+  const next = safeRedirect(field(formData, "redirect"), "/app");
 
   const { data, error } = await supabase.auth.signInWithOAuth({
     provider: "google",
