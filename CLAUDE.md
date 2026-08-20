@@ -343,6 +343,7 @@ Cada fase termina com o sistema rodando e testavel. Commits pequenos e frequente
 | `npm run db:seed` | Semeia o plano de contas padrao |
 | `npm run db:setup` | migrate deploy + generate + seed |
 | `npm run db:studio` | Prisma Studio |
+| `npm run doctor` | Diagnostica .env, Supabase, banco, seed e RLS |
 
 ### Decisoes tecnicas tomadas na Fase 0
 

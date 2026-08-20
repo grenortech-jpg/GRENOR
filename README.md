@@ -44,6 +44,12 @@ Preencha:
 | `NEXT_PUBLIC_SITE_URL` | `http://localhost:3000` em desenvolvimento |
 | `AI_ENABLED` / `ANTHROPIC_API_KEY` | Opcionais: a aplicação funciona sem IA |
 
+Confira a qualquer momento se está tudo no lugar:
+
+```bash
+npm run doctor
+```
+
 ### 4. Banco de dados
 
 ```bash
@@ -85,6 +91,7 @@ npm run dev
 | `npm run db:deploy` | Aplica migrações pendentes |
 | `npm run db:seed` | Semeia o plano de contas padrão |
 | `npm run db:studio` | Prisma Studio |
+| `npm run doctor` | Diagnostica `.env`, Supabase, banco, seed e RLS |
 
 ## Deploy
 
