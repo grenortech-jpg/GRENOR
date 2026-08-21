@@ -95,12 +95,12 @@ function buildMonth(params: {
     push(
       day,
       `PIX RECEBIDO ${suffix}`,
-      scale(18_000 + Math.round(random() * 92_000)),
+      scale(120_000 + Math.round(random() * 200_000)),
       "Receita de vendas",
     );
 
     if (day % 3 === 0) {
-      const card = scale(85_000 + Math.round(random() * 210_000));
+      const card = scale(350_000 + Math.round(random() * 300_000));
       cardRevenue += card;
       push(day, "CIELO CREDITO D+30", card, "Receita de vendas");
     }
@@ -113,7 +113,7 @@ function buildMonth(params: {
     push(
       day,
       "PAG FORNECEDOR MOINHO CENTRAL",
-      -scale(320_000 + Math.round(random() * 280_000)),
+      -scale(800_000 + Math.round(random() * 400_000)),
       "Fornecedores / CMV",
     );
   }
@@ -125,21 +125,21 @@ function buildMonth(params: {
   );
 
   // --- Pessoal ------------------------------------------------------------
-  push(5, "FOLHA DE PAGAMENTO", -1_240_000, "Salários");
-  push(5, "PRO LABORE SOCIO", -500_000, "Pró-labore");
-  push(7, "GPS INSS COMPETENCIA", -268_000, "Encargos (INSS/FGTS)");
-  push(7, "FGTS CONECTIVIDADE SOCIAL", -99_200, "Encargos (INSS/FGTS)");
-  push(5, "VALE TRANSPORTE", -84_000, "Benefícios");
+  push(5, "FOLHA DE PAGAMENTO", -1_600_000, "Salários");
+  push(5, "PRO LABORE SOCIO", -600_000, "Pró-labore");
+  push(7, "GPS INSS COMPETENCIA", -350_000, "Encargos (INSS/FGTS)");
+  push(7, "FGTS CONECTIVIDADE SOCIAL", -128_000, "Encargos (INSS/FGTS)");
+  push(5, "VALE TRANSPORTE", -120_000, "Benefícios");
 
   // --- Operacionais -------------------------------------------------------
-  push(10, "ALUGUEL LOJA - IMOBILIARIA CENTRO", -420_000, "Aluguel e condomínio");
-  push(15, "ENEL DISTRIBUICAO", -138_000, "Energia, água e internet");
-  push(15, "SABESP", -46_000, "Energia, água e internet");
-  push(16, "VIVO FIBRA EMPRESAS", -19_900, "Energia, água e internet");
+  push(10, "ALUGUEL LOJA - IMOBILIARIA CENTRO", -650_000, "Aluguel e condomínio");
+  push(15, "ENEL DISTRIBUICAO", -320_000, "Energia, água e internet");
+  push(15, "SABESP", -90_000, "Energia, água e internet");
+  push(16, "VIVO FIBRA EMPRESAS", -40_000, "Energia, água e internet");
   push(3, "ASSINATURA SISTEMA PDV", -39_000, "Software e tecnologia");
-  push(10, "HONORARIOS CONTABEIS", -89_000, "Serviços de terceiros");
-  push(12, "IMPULSIONAMENTO REDES", -60_000, "Marketing e comercial");
-  push(20, "MATERIAL DE LIMPEZA E EMBALAGEM", -74_000, "Despesas administrativas");
+  push(10, "HONORARIOS CONTABEIS", -120_000, "Serviços de terceiros");
+  push(12, "IMPULSIONAMENTO REDES", -90_000, "Marketing e comercial");
+  push(20, "MATERIAL DE LIMPEZA E EMBALAGEM", -180_000, "Despesas administrativas");
 
   // --- Impostos: DAS incide sobre o faturamento do mes --------------------
   push(
@@ -279,7 +279,7 @@ async function main() {
             nickname: "Conta corrente",
             // Saldo da vespera do primeiro extrato: contar lancamentos
             // anteriores somaria o mesmo dinheiro duas vezes.
-            openingBalanceCents: 1_850_000,
+            openingBalanceCents: 4_500_000,
             openingBalanceDate: openingDate,
           },
         },
