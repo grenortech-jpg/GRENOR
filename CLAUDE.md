@@ -580,4 +580,6 @@ scripts/demo.ts                       empresa de demonstracao (3 meses)
 tests/unit/                           sem rede
 tests/fixtures/                       OFX 1.x, OFX 2.x, CSV ; , e XLSX
 tests/integration/                    isolamento e importacao, exigem banco
+  company-months.test.ts              historico e isolamento do $queryRaw
+  waitlist.test.ts                    lista de espera pela propria action
 ```
