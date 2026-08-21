@@ -14,6 +14,9 @@ import {
 import { DreTable } from "@/components/reports/dre-table";
 import { Indicators } from "@/components/reports/indicators";
 import { SharePanel } from "@/components/reports/share-panel";
+import { SummaryPanel } from "@/components/reports/summary-panel";
+import { isAiEnabled } from "@/lib/ai/client";
+import { MAX_SUMMARY_GENERATIONS } from "@/lib/ai/summary-prompt";
 import { assertCompanyInWorkspace, getWorkspaceOrThrow } from "@/lib/auth/workspace";
 import { formatAmount, formatDate, formatMonth } from "@/lib/format";
 import {
@@ -138,6 +141,17 @@ export default async function ClosingPage({
         monthKey={monthKey}
         monthLabel={monthLabel}
         checklist={checklist}
+      />
+
+      <SummaryPanel
+        companyId={company.id}
+        monthKey={monthKey}
+        periodId={period?.id ?? null}
+        summary={period?.report?.aiSummary ?? null}
+        generationsUsed={period?.report?.aiRegenerationCount ?? 0}
+        maxGenerations={MAX_SUMMARY_GENERATIONS}
+        aiEnabled={isAiEnabled()}
+        closed={period?.status === "CLOSED"}
       />
 
       <SharePanel

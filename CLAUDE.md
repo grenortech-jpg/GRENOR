@@ -337,6 +337,9 @@ depende de credito na conta Anthropic; AI_ENABLED esta false por decisao do
 usuario ate haver cliente pagante).
 **Fase 5 - DRE e dashboard: concluida.**
 **Fase 6 - Relatorio PDF e link publico: concluida.**
+**Fase 7 - Parecer executivo por IA: concluida** (mesma ressalva da Fase 4:
+o caminho da IA nao foi exercitado contra a API real; o caminho manual, que e
+o unico ativo com AI_ENABLED=false, esta funcionando).
 Demais fases: pendentes.
 
 ### Comandos
@@ -452,6 +455,26 @@ Versoes instaladas ficaram acima do previsto na Secao 2. Diferencas que importam
 - **Falha de IA e silenciosa por design** (Secao 8.1). Lote que estoura timeout
   ou devolve JSON invalido duas vezes fica sem categoria e a execucao segue nos
   demais.
+- **O parecer descreve o snapshot, nunca um recalculo.** `generateSummaryAction`
+  le `report.snapshotJson` e exige periodo fechado. Se o texto falasse de
+  numeros calculados ao vivo enquanto a DRE mostra os congelados, os dois se
+  contradiriam dentro do mesmo PDF.
+- **"Maximo 3 regeracoes" (Secao 5.6) conta 3 chamadas no total**, incluindo a
+  primeira, e o contador nao zera ao reabrir e refechar - senao reabrir em loop
+  daria IA infinita. Edicao manual do texto e ilimitada e sem custo.
+- **O contador so avanca quando ha texto entregue.** Chamada que falhou nao
+  consome uma das tres: cobrar do usuario o erro da API e injusto, e falha de
+  auth ou billing nem chega a gastar token.
+- **O parecer e entrada de usuario num documento publico.** Depois da Fase 7 o
+  campo e digitavel, e o mesmo texto vai para o PDF e para `/r/[shareToken]`,
+  que abre na maquina do cliente do escritorio. `summaryHtml` escapa paragrafo
+  a paragrafo, com teste de regressao.
+- **Resetar campo quando a prop muda se faz com `key`, nao com efeito.** O
+  ESLint (`react-hooks/set-state-in-effect`) barra `setState` dentro de
+  `useEffect`; remontar o textarea por `key` faz o mesmo sem render em cascata.
+- **Sonnet 5 rejeita `temperature` e `top_p` com 400.** O parecer roda com
+  raciocinio adaptativo e `effort: "medium"` - interpretar variacao pede
+  analise, mas o padrao (`high`) arrisca estourar os 30s da Secao 8.3.
 
 ### Estrutura
 
@@ -495,6 +518,7 @@ src/
       normalize.ts dedupe.ts          dedupeHash e separacao de duplicatas
       storage.ts                      bucket privado de extratos
     ai/{client,prompt,categorize}.ts  camada 2: IA em lote, limites e custo
+    ai/{summary-prompt,summarize}.ts  parecer executivo (Secao 8.2)
     reports/dre.ts                    calculo da DRE, puro e testavel
     reports/load.ts                   carga dos dados do periodo
     reports/report-html.ts            o relatorio, como HTML (PDF e link)

@@ -272,3 +272,33 @@ describe("rodape", () => {
     expect(html).toContain("01/09/2026");
   });
 });
+
+describe("parecer executivo", () => {
+  it("omite a secao inteira quando nao ha parecer", () => {
+    expect(html).not.toContain("Sumário executivo");
+  });
+
+  it("quebra em paragrafos nas linhas em branco", () => {
+    const comParecer = renderReportHtml({
+      ...data,
+      summary: "Primeiro parágrafo.\n\nSegundo parágrafo.",
+    });
+
+    expect(comParecer).toContain("Sumário executivo");
+    expect(comParecer).toContain(">Primeiro parágrafo.<");
+    expect(comParecer).toContain(">Segundo parágrafo.<");
+  });
+
+  it("escapa o parecer, que agora e texto digitado pelo usuario", () => {
+    // O parecer virou campo editavel (Fase 7) e o link publico abre na
+    // maquina do cliente do escritorio: e entrada de usuario num documento
+    // que sai do nosso dominio.
+    const malicioso = renderReportHtml({
+      ...data,
+      summary: '<script>alert("x")</script>',
+    });
+
+    expect(malicioso).not.toContain('<script>alert("x")</script>');
+    expect(malicioso).toContain("&lt;script&gt;");
+  });
+});

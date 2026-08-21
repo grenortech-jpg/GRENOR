@@ -8,7 +8,13 @@ import {
 } from "@/lib/auth/workspace";
 import { monthEnd, monthStart, parseMonthKey } from "@/lib/period";
 import { prisma } from "@/lib/prisma";
-import { loadPeriodReport } from "@/lib/reports/load";
+import { isAiEnabled } from "@/lib/ai/client";
+import { generateSummary } from "@/lib/ai/summarize";
+import {
+  MAX_SUMMARY_GENERATIONS,
+  MAX_SUMMARY_LENGTH,
+} from "@/lib/ai/summary-prompt";
+import { loadPeriodReport, type PeriodReport } from "@/lib/reports/load";
 import { field, firstIssue, parseId } from "@/lib/validation/schemas";
 
 export type ClosingState = {
@@ -238,4 +244,152 @@ export async function rotateShareTokenAction(
   revalidatePath(`/empresas/${company.id}/fechamento`);
 
   return { success: "Novo link gerado. O anterior deixou de funcionar." };
+}
+
+// ---------------------------------------------------------------------------
+// Parecer executivo (Secoes 7 e 8.2)
+// ---------------------------------------------------------------------------
+
+/**
+ * Gera o parecer por IA a partir do snapshot congelado.
+ *
+ * Le o snapshot, nunca um recalculo ao vivo: o parecer e assinado pelo
+ * escritorio e fica na mesma pagina dos numeros. Se o texto descrevesse um
+ * calculo novo enquanto a DRE mostra o que foi congelado no fechamento, os
+ * dois se contradiriam no documento entregue ao cliente.
+ */
+export async function generateSummaryAction(
+  _prevState: ClosingState,
+  formData: FormData,
+): Promise<ClosingState> {
+  const context = await getWorkspaceOrThrow();
+
+  const companyId = parseId(formData, "companyId");
+  if (!companyId.success) return { error: firstIssue(companyId.error) };
+  const company = await assertCompanyInWorkspace(companyId.data, context);
+
+  const monthValue = field(formData, "mes");
+  const month = monthValue ? parseMonthKey(monthValue) : null;
+  if (!month) return { error: "Período inválido." };
+
+  if (!isAiEnabled()) {
+    return {
+      error:
+        "A IA está desligada. Escreva o parecer no campo abaixo ou ative AI_ENABLED no .env.",
+    };
+  }
+
+  const period = await prisma.period.findUnique({
+    where: {
+      companyId_year_month: {
+        companyId: company.id,
+        year: month.year,
+        month: month.month,
+      },
+    },
+    include: { report: true },
+  });
+
+  if (period?.status !== "CLOSED" || !period.report) {
+    return {
+      error: "Feche o período antes de gerar o parecer: ele descreve os números congelados.",
+    };
+  }
+
+  if (period.report.aiRegenerationCount >= MAX_SUMMARY_GENERATIONS) {
+    return {
+      error: `Limite de ${MAX_SUMMARY_GENERATIONS} gerações por período atingido. Ajuste o texto manualmente no campo abaixo.`,
+    };
+  }
+
+  const run = await generateSummary({
+    workspaceId: context.workspace.id,
+    company: company.name,
+    report: period.report.snapshotJson as unknown as PeriodReport,
+    month,
+  });
+
+  if (!run.ok) {
+    const motivos: Record<string, string> = {
+      billing:
+        "A conta da Anthropic está sem créditos. Adicione em console.anthropic.com → Plans & Billing e tente de novo.",
+      auth:
+        "A chave da Anthropic foi recusada. Confira ANTHROPIC_API_KEY no .env e reinicie o servidor.",
+      rate_limit:
+        "Limite de requisições da Anthropic atingido. Aguarde alguns instantes e tente de novo.",
+      other:
+        "A IA não respondeu. Nenhuma geração foi consumida — tente de novo ou escreva o parecer à mão.",
+    };
+    return { error: motivos[run.reason] };
+  }
+
+  // O contador so avanca quando ha texto entregue: cobrar uma das tres
+  // geracoes por uma chamada que falhou puniria o usuario pelo erro da API.
+  const used = period.report.aiRegenerationCount + 1;
+
+  await prisma.report.update({
+    where: { id: period.report.id },
+    data: { aiSummary: run.summary, aiRegenerationCount: used },
+  });
+
+  revalidatePath(`/empresas/${company.id}/fechamento`);
+
+  const left = MAX_SUMMARY_GENERATIONS - used;
+
+  return {
+    success:
+      left > 0
+        ? `Parecer gerado. Restam ${left} geração(ões) neste período.`
+        : "Parecer gerado. Era a última geração por IA deste período; daqui em diante, edição manual.",
+  };
+}
+
+/**
+ * Salva o parecer escrito ou ajustado a mao.
+ *
+ * Sem limite de uso e sem custo: e o caminho unico quando AI_ENABLED esta
+ * desligado (Secao 8.3) e a revisao final quando esta ligado, porque o texto
+ * sai assinado pelo escritorio.
+ */
+export async function saveSummaryAction(
+  _prevState: ClosingState,
+  formData: FormData,
+): Promise<ClosingState> {
+  const context = await getWorkspaceOrThrow();
+
+  const companyId = parseId(formData, "companyId");
+  if (!companyId.success) return { error: firstIssue(companyId.error) };
+  const company = await assertCompanyInWorkspace(companyId.data, context);
+
+  const periodId = parseId(formData, "periodId");
+  if (!periodId.success) return { error: firstIssue(periodId.error) };
+
+  const period = await prisma.period.findFirst({
+    where: { id: periodId.data, company: { workspaceId: context.workspace.id } },
+    include: { report: true },
+  });
+
+  if (!period?.report) {
+    return { error: "Feche o período antes de escrever o parecer." };
+  }
+
+  const text = (field(formData, "parecer") ?? "").trim();
+
+  if (text.length > MAX_SUMMARY_LENGTH) {
+    return {
+      error: `O parecer passou de ${MAX_SUMMARY_LENGTH} caracteres. Um sumário executivo cabe em 300 palavras.`,
+    };
+  }
+
+  await prisma.report.update({
+    where: { id: period.report.id },
+    // Texto vazio limpa o parecer: o relatorio omite a secao inteira.
+    data: { aiSummary: text.length > 0 ? text : null },
+  });
+
+  revalidatePath(`/empresas/${company.id}/fechamento`);
+
+  return {
+    success: text.length > 0 ? "Parecer salvo." : "Parecer removido do relatório.",
+  };
 }
