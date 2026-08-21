@@ -477,6 +477,21 @@ Versoes instaladas ficaram acima do previsto na Secao 2. Diferencas que importam
   maiores lancamentos usam `flex-wrap` com base de 260px, para ficarem lado a
   lado no PDF e empilharem no telefone. Sem media query: o mesmo HTML serve aos
   dois.
+- **`Period` so existe depois do fechamento.** A tabela ganha linha quando o
+  mes e fechado, entao ela nao serve para listar o historico: uma empresa com
+  tres meses importados e nenhum fechamento aparecia como "nenhum periodo
+  ainda". O historico vem de `listCompanyMonths`, que agrupa os lancamentos por
+  ano/mes.
+- **O status da empresa e do MES corrente, nao da empresa.** Por isso o badge
+  fica ao lado da competencia e nao do nome: "Sem dados" ao lado do titulo, com
+  170 lancamentos na mesma tela, diz uma mentira sobre a empresa.
+- **Toda tela precisa de saida para meses anteriores.** Os atalhos do topo so
+  aparecem quando o mes corrente tem movimento; sem a lista de meses clicavel,
+  uma empresa com historico e o mes corrente vazio virava beco sem saida.
+- **O unico `$queryRaw` do projeto** esta em `lib/companies/months.ts`: o
+  Prisma nao agrupa por parte de data, e a alternativa era carregar a tabela de
+  lancamentos inteira so para contar. Leva o `workspace_id` na propria consulta,
+  como segundo cinto da Secao 3.
 - **Falha de IA e silenciosa por design** (Secao 8.1). Lote que estoura timeout
   ou devolve JSON invalido duas vezes fica sem categoria e a execucao segue nos
   demais.
@@ -538,6 +553,7 @@ src/
     validation/schemas.ts             schemas de workspace/empresa/conta
     categories/default-plan.ts        plano de contas (fonte unica)
     companies/overview.ts             grid do workspace com status do mes
+    companies/months.ts               meses com movimento de uma empresa
     workspace/{create,slug}.ts        criacao do workspace e slug
     import/                           parsers e normalizacao da Secao 5.1
       parse.ts                        orquestrador, deteccao de formato, limites

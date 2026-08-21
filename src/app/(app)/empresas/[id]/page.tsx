@@ -1,6 +1,6 @@
 import type { Metadata } from "next";
 import Link from "next/link";
-import { ArrowLeft, FileBarChart, ListChecks, Upload } from "lucide-react";
+import { ArrowLeft, ChevronRight, FileBarChart, ListChecks, Upload } from "lucide-react";
 
 import { AccountList, type AccountView } from "@/components/accounts/account-list";
 import { CompanyStatusBadge } from "@/components/companies/company-card";
@@ -9,6 +9,7 @@ import { buttonVariants } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { canAdminister, assertCompanyInWorkspace, getWorkspaceOrThrow } from "@/lib/auth/workspace";
 import { getCompanyOverview } from "@/lib/companies/overview";
+import { listCompanyMonths } from "@/lib/companies/months";
 import {
   formatAmount,
   formatDate,
@@ -16,7 +17,7 @@ import {
   formatCnpj,
   toDateInputValue,
 } from "@/lib/format";
-import { currentMonth } from "@/lib/period";
+import { currentMonth, monthKey } from "@/lib/period";
 import { prisma } from "@/lib/prisma";
 
 export async function generateMetadata({
@@ -38,16 +39,15 @@ export default async function CompanyPage({ params }: PageProps<"/empresas/[id]"
 
   const month = currentMonth();
 
-  const [accounts, periods, overview] = await Promise.all([
+  const [accounts, months, overview] = await Promise.all([
     prisma.bankAccount.findMany({
       where: { companyId: company.id },
       orderBy: { createdAt: "asc" },
       include: { _count: { select: { transactions: true } } },
     }),
-    prisma.period.findMany({
-      where: { companyId: company.id },
-      orderBy: [{ year: "desc" }, { month: "desc" }],
-      take: 12,
+    listCompanyMonths({
+      companyId: company.id,
+      workspaceId: context.workspace.id,
     }),
     getCompanyOverview(context, company.id, month),
   ]);
@@ -76,12 +76,9 @@ export default async function CompanyPage({ params }: PageProps<"/empresas/[id]"
 
         <div className="mt-3 flex flex-wrap items-start justify-between gap-4">
           <div className="min-w-0">
-            <div className="flex items-center gap-3">
-              <h1 className="truncate text-2xl font-semibold tracking-tight">
-                {company.name}
-              </h1>
-              {overview && <CompanyStatusBadge status={overview.status} />}
-            </div>
+            <h1 className="truncate text-2xl font-semibold tracking-tight">
+              {company.name}
+            </h1>
             <p className="mt-1 text-sm text-muted-foreground">
               {company.cnpj ? formatCnpj(company.cnpj) : "CNPJ não informado"}
               {company.segment ? ` · ${company.segment}` : ""}
@@ -103,8 +100,9 @@ export default async function CompanyPage({ params }: PageProps<"/empresas/[id]"
       <Card>
         <CardContent className="flex flex-wrap items-center justify-between gap-4 py-5">
           <div>
-            <p className="text-sm font-medium">
+            <p className="flex flex-wrap items-center gap-2 text-sm font-medium">
               {formatMonth(month.year, month.month)}
+              {overview && <CompanyStatusBadge status={overview.status} />}
             </p>
             <p className="mt-0.5 text-sm text-muted-foreground">
               {overview && overview.transactionsInMonth > 0
@@ -146,25 +144,53 @@ export default async function CompanyPage({ params }: PageProps<"/empresas/[id]"
       <AccountList companyId={company.id} accounts={accountViews} />
 
       <div className="space-y-3">
-        <h2 className="font-medium">Períodos</h2>
+        <h2 className="font-medium">Meses com movimento</h2>
 
-        {periods.length === 0 ? (
+        {months.length === 0 ? (
           <p className="rounded-lg border border-dashed px-6 py-10 text-center text-sm text-muted-foreground">
-            Nenhum período ainda. Eles aparecem depois da primeira importação.
+            Nenhum lançamento ainda. Importe um extrato para começar.
           </p>
         ) : (
           <ul className="divide-y rounded-lg border">
-            {periods.map((period) => (
-              <li
-                key={period.id}
-                className="flex items-center justify-between px-4 py-3 text-sm"
-              >
-                <span>{formatMonth(period.year, period.month)}</span>
-                <span className="text-muted-foreground">
-                  {period.status === "CLOSED" ? "Fechado" : "Aberto"}
-                </span>
-              </li>
-            ))}
+            {months.map((entry) => {
+              const key = monthKey(entry);
+
+              // Com pendencia o caminho util e a conciliacao; sem, o relatorio.
+              const href =
+                entry.pending > 0
+                  ? `/empresas/${company.id}/conciliacao?mes=${key}`
+                  : `/empresas/${company.id}/fechamento?mes=${key}`;
+
+              return (
+                <li key={key}>
+                  <Link
+                    href={href}
+                    className="flex items-center justify-between gap-4 px-4 py-3 text-sm transition-colors hover:bg-accent/40"
+                  >
+                    <span className="min-w-0">
+                      <span className="block font-medium">
+                        {formatMonth(entry.year, entry.month)}
+                      </span>
+                      <span className="block text-xs text-muted-foreground">
+                        {entry.total} lançamento(s)
+                        {entry.pending > 0
+                          ? ` · ${entry.pending} sem categoria`
+                          : ""}
+                      </span>
+                    </span>
+
+                    <span className="flex shrink-0 items-center gap-2 text-muted-foreground">
+                      {entry.status === "CLOSED"
+                        ? "Fechado"
+                        : entry.pending > 0
+                          ? "Em conciliação"
+                          : "Pronto para fechar"}
+                      <ChevronRight className="size-4" aria-hidden="true" />
+                    </span>
+                  </Link>
+                </li>
+              );
+            })}
           </ul>
         )}
       </div>
