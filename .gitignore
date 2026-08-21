@@ -53,3 +53,6 @@ next-env.d.ts
 
 .vercel
 .env*
+
+# O modelo de variaveis e versionado (Secao 11): apenas placeholders.
+!.env.example
