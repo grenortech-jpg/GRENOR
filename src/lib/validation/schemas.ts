@@ -149,3 +149,41 @@ export const uuidSchema = z.string().uuid("Identificador inválido.");
 export function parseId(formData: FormData, name = "id") {
   return uuidSchema.safeParse(requiredField(formData, name));
 }
+
+// ---------------------------------------------------------------------------
+// Lista de espera (Fase 8)
+// ---------------------------------------------------------------------------
+
+/**
+ * Formulario publico da landing.
+ *
+ * So o e-mail e obrigatorio: cada campo a mais numa lista de espera derruba a
+ * conversao, e nome e escritorio sao perguntas que a conversa comercial faz
+ * melhor do que um formulario.
+ */
+export const waitlistSchema = z.object({
+  email: z
+    .string()
+    .trim()
+    .min(1, "Informe o e-mail.")
+    .email("E-mail inválido.")
+    .max(160, "E-mail muito longo."),
+  name: z
+    .string()
+    .trim()
+    .max(120, "Nome muito longo (máximo 120 caracteres).")
+    .optional(),
+  office: z
+    .string()
+    .trim()
+    .max(120, "Nome do escritório muito longo (máximo 120 caracteres).")
+    .optional(),
+});
+
+export function parseWaitlist(formData: FormData) {
+  return waitlistSchema.safeParse({
+    email: requiredField(formData, "email"),
+    name: optionalField(formData, "name"),
+    office: optionalField(formData, "office"),
+  });
+}

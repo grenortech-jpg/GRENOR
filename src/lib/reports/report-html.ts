@@ -242,7 +242,11 @@ function dreTable(
     }
   }
 
-  return `<table style="width:100%;border-collapse:collapse;font-size:11px">
+  // As celulas numericas usam white-space:nowrap, entao a tabela tem largura
+  // minima propria. No PDF (760px) sobra espaco; num celular, sem este
+  // contentor a tabela empurraria a pagina inteira para o lado.
+  return `<div style="overflow-x:auto">
+<table style="width:100%;border-collapse:collapse;font-size:11px">
 <thead><tr style="border-bottom:1px solid ${LINE}">
 <th style="${CELL};text-align:left;font-size:10px;color:${MUTED}">Conta</th>
 <th style="${CELL};font-size:10px;color:${MUTED}">${monthLabel}</th>
@@ -250,7 +254,8 @@ function dreTable(
 <th style="${CELL};font-size:10px;color:${MUTED}">Variação</th>
 </tr></thead>
 <tbody>${rows.join("")}</tbody>
-</table>`;
+</table>
+</div>`;
 }
 
 function totalRow(total: PeriodReport["dre"]["operatingResult"]): string {
@@ -285,13 +290,15 @@ function biggestTransactions(report: PeriodReport): string {
       )
       .join("");
 
-    return `<div style="flex:1">
+    // flex-basis de 260px com wrap: cabem lado a lado na largura do PDF e
+    // empilham sozinhos num celular, sem media query.
+    return `<div style="flex:1 1 260px;min-width:0">
 <p style="margin:0 0 6px;font-size:11px;font-weight:600">${escapeHtml(title)}</p>
 <table style="width:100%;border-collapse:collapse;font-size:10px"><tbody>${body}</tbody></table>
 </div>`;
   };
 
-  return `<div style="display:flex;gap:20px">${table("Saídas", report.biggestOutflows)}${table("Entradas", report.biggestInflows)}</div>`;
+  return `<div style="display:flex;flex-wrap:wrap;gap:20px">${table("Saídas", report.biggestOutflows)}${table("Entradas", report.biggestInflows)}</div>`;
 }
 
 function footer(generatedAt: Date): string {

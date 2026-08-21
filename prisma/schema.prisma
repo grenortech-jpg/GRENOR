@@ -321,3 +321,20 @@ model Report {
 
   @@map("reports")
 }
+
+/// Lista de espera da pagina publica (Fase 8).
+///
+/// Fica fora do modelo multi-tenant de proposito: nao pertence a workspace
+/// nenhum, porque quem se inscreve ainda nao e cliente. Por isso tambem nao
+/// ganha policy de RLS - so o dono das tabelas (a aplicacao) a alcanca.
+model WaitlistEntry {
+  id    String  @id @default(uuid()) @db.Uuid
+  email String  @unique
+  name  String?
+  /// Nome do escritorio ou BPO, quando informado.
+  office String?
+
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+
+  @@map("waitlist_entries")
+}

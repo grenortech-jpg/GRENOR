@@ -340,7 +340,11 @@ usuario ate haver cliente pagante).
 **Fase 7 - Parecer executivo por IA: concluida** (mesma ressalva da Fase 4:
 o caminho da IA nao foi exercitado contra a API real; o caminho manual, que e
 o unico ativo com AI_ENABLED=false, esta funcionando).
-Demais fases: pendentes.
+**Fase 8 - Polimento de lancamento: concluida.** A migracao
+`20260821100000_waitlist` precisa ser aplicada (`npm run db:deploy`) antes de
+a lista de espera funcionar.
+
+Todas as fases da Secao 10 estao concluidas.
 
 ### Comandos
 
@@ -355,6 +359,7 @@ Demais fases: pendentes.
 | `npm run test:all` | Unitarios + integracao |
 | `npm run db:deploy` | Aplica as migracoes |
 | `npm run db:seed` | Semeia o plano de contas padrao |
+| `npm run db:demo -- <slug>` | Empresa de demonstracao com 3 meses de dados |
 | `npm run db:setup` | migrate deploy + generate + seed |
 | `npm run db:studio` | Prisma Studio |
 | `npm run doctor` | Diagnostica .env, Supabase, banco, seed e RLS |
@@ -452,6 +457,26 @@ Versoes instaladas ficaram acima do previsto na Secao 2. Diferencas que importam
 - **Nada de estado mutavel em nivel de modulo em Server Components.** E
   compartilhado entre requisicoes concorrentes e vaza dados de um tenant no
   render de outro.
+- **A fronteira de erro do Next 16 recebe `retry`, nao `reset`.** `retry`
+  estabilizou na 16.3 e refaz a busca dos dados; `reset` so limpa o estado e
+  re-renderiza, sem buscar de novo. Escrever `reset` por habito das versoes
+  anteriores da um botao que nao conserta nada.
+- **Erro nao mostra `error.message` ao usuario.** A mensagem pode carregar
+  detalhe de banco ou de infraestrutura e a pagina e publica; o que aparece e
+  o `digest`, que localiza o erro real no log do servidor.
+- **A lista de espera nao tem policy de RLS, de proposito.** Nas tabelas
+  financeiras a policy por workspace e a segunda barreira, mas quem se inscreve
+  nao pertence a workspace nenhum: uma policy permissiva ali abriria a lista de
+  e-mails para leitura publica. Sem policy, nenhuma linha e visivel - so o dono
+  das tabelas (a aplicacao) alcanca.
+- **E-mail repetido na lista responde sucesso, nao erro.** Mensagem diferente
+  para endereco ja cadastrado transformaria o formulario publico num oraculo de
+  "esse e-mail esta na lista?".
+- **O relatorio tambem abre em celular.** As celulas da DRE usam
+  `white-space:nowrap`, entao a tabela vai dentro de um `overflow-x:auto`; os
+  maiores lancamentos usam `flex-wrap` com base de 260px, para ficarem lado a
+  lado no PDF e empilharem no telefone. Sem media query: o mesmo HTML serve aos
+  dois.
 - **Falha de IA e silenciosa por design** (Secao 8.1). Lote que estoura timeout
   ou devolve JSON invalido duas vezes fica sem categoria e a execucao segue nos
   demais.
@@ -496,6 +521,9 @@ src/
       empresas/[id]/fechamento/       DRE, indicadores, graficos, fechamento
     api/relatorio/[periodId]/pdf/     geracao do PDF (nodejs, maxDuration 60)
     r/[shareToken]/                   relatorio publico, sem login
+    page.tsx actions.ts               landing e lista de espera
+    error.tsx global-error.tsx        fronteiras de erro
+    not-found.tsx                     404 publica
       configuracoes/regras/           CRUD das regras do workspace
       onboarding/                     wizard de 4 passos
       actions.ts                      CRUD de workspace, empresa e conta
@@ -532,6 +560,7 @@ src/
     supabase/{server,client,admin,auth-settings}.ts
     env.ts prisma.ts site-url.ts
   proxy.ts                            renovacao de sessao + guarda de rotas
+scripts/demo.ts                       empresa de demonstracao (3 meses)
 tests/unit/                           sem rede
 tests/fixtures/                       OFX 1.x, OFX 2.x, CSV ; , e XLSX
 tests/integration/                    isolamento e importacao, exigem banco

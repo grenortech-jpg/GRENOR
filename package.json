@@ -19,7 +19,8 @@
     "postinstall": "prisma generate",
     "doctor": "tsx scripts/doctor.ts",
     "test:db": "vitest run --config vitest.integration.mts",
-    "test:all": "vitest run && vitest run --config vitest.integration.mts"
+    "test:all": "vitest run && vitest run --config vitest.integration.mts",
+    "db:demo": "tsx scripts/demo.ts"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.120.0",

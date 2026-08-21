@@ -302,3 +302,17 @@ describe("parecer executivo", () => {
     expect(malicioso).toContain("&lt;script&gt;");
   });
 });
+
+describe("telas estreitas", () => {
+  it("contem a rolagem da DRE em vez de empurrar a pagina", () => {
+    // As celulas usam white-space:nowrap: sem contentor proprio, a tabela
+    // arrasta o corpo inteiro para o lado no celular do cliente.
+    expect(html).toContain('<div style="overflow-x:auto">');
+  });
+
+  it("deixa os maiores lancamentos empilharem", () => {
+    // Lado a lado numa tela de 375px daria duas colunas de ~150px.
+    expect(html).toContain("flex-wrap:wrap");
+    expect(html).toContain("flex:1 1 260px");
+  });
+});
