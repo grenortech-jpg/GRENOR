@@ -57,11 +57,11 @@ export type ParseOptions = {
  * Ponto de entrada da importacao: recebe o arquivo cru e devolve as transacoes
  * normalizadas mais os metadados que o preview usa.
  */
-export function parseStatement(
+export async function parseStatement(
   buffer: Buffer,
   fileName: string,
   options: ParseOptions = {},
-): ParseResult {
+): Promise<ParseResult> {
   if (buffer.length === 0) {
     throw new ParseError("O arquivo está vazio.");
   }
@@ -80,7 +80,7 @@ export function parseStatement(
     );
   }
 
-  const result = runParser(buffer, fileType, options);
+  const result = await runParser(buffer, fileType, options);
 
   if (result.transactions.length > MAX_ROWS) {
     throw new ParseError(
@@ -91,11 +91,11 @@ export function parseStatement(
   return result;
 }
 
-function runParser(
+async function runParser(
   buffer: Buffer,
   fileType: ImportFileType,
   options: ParseOptions,
-): ParseResult {
+): Promise<ParseResult> {
   if (fileType === "XLSX") {
     return parseXlsx(buffer, {
       sheetName: options.sheetName,

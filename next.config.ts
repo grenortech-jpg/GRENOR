@@ -12,6 +12,8 @@ const nextConfig: NextConfig = {
     "@sparticuz/chromium",
     "playwright-core",
     "@prisma/adapter-pg",
+    // CommonJS com requires dinamicos; roda melhor fora do bundle.
+    "exceljs",
   ],
 
   /**

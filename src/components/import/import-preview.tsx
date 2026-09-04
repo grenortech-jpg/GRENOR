@@ -6,7 +6,7 @@ import { useActionState } from "react";
 import {
   confirmImportAction,
   discardImportAction,
-  repreviewAction,
+  repreviewAction as repreviewFormAction,
   type ImportPreview,
   type ImportState,
 } from "@/app/(app)/empresas/[id]/importar/actions";
@@ -25,7 +25,13 @@ const initialState: ImportState = {};
  * em vez de escondê-las: o usuario precisa entender por que 40 lancamentos
  * viraram 12.
  */
-export function ImportPreviewPanel({ preview }: { preview: ImportPreview }) {
+export function ImportPreviewPanel({ preview: initial }: { preview: ImportPreview }) {
+  // Um unico estado de reprocessamento (aba ou colunas). Cada formulario
+  // tinha o seu e descartava o preview devolvido: a action rodava e a tela
+  // nao mudava.
+  const [repreview, repreviewAction] = useActionState(repreviewFormAction, initialState);
+  const preview = repreview.preview ?? initial;
+
   return (
     <div className="space-y-6">
       <div className="flex flex-wrap items-center gap-2 text-sm text-muted-foreground">
@@ -39,13 +45,24 @@ export function ImportPreviewPanel({ preview }: { preview: ImportPreview }) {
       </div>
 
       {preview.sheetNames && preview.sheetNames.length > 1 && (
-        <SheetPicker preview={preview} />
+        <SheetPicker
+          key={preview.sheetName}
+          preview={preview}
+          action={repreviewAction}
+          feedback={repreview}
+        />
       )}
 
       {/* Aberto de saida quando nada foi reconhecido: sem mapeamento manual a
           importacao nao tem como prosseguir. */}
       {preview.sampleRows && preview.sampleRows.length > 0 && (
-        <ColumnMapper preview={preview} defaultOpen={preview.needsMapping} />
+        <ColumnMapper
+          key={`${preview.sheetName ?? ""}:${JSON.stringify(preview.mapping ?? null)}`}
+          preview={preview}
+          defaultOpen={preview.needsMapping}
+          action={repreviewAction}
+          feedback={repreview}
+        />
       )}
 
       <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
@@ -192,11 +209,17 @@ function Stat({
   );
 }
 
-function SheetPicker({ preview }: { preview: ImportPreview }) {
-  const [state, formAction] = useActionState(repreviewAction, initialState);
-
+function SheetPicker({
+  preview,
+  action,
+  feedback,
+}: {
+  preview: ImportPreview;
+  action: (formData: FormData) => void;
+  feedback: ImportState;
+}) {
   return (
-    <form action={formAction} className="flex flex-wrap items-end gap-3">
+    <form action={action} className="flex flex-wrap items-end gap-3">
       <input type="hidden" name="batchId" value={preview.batchId} />
 
       <div className="space-y-1.5">
@@ -221,7 +244,7 @@ function SheetPicker({ preview }: { preview: ImportPreview }) {
         Reler com esta aba
       </SubmitButton>
 
-      <FormFeedback state={state} />
+      <FormFeedback state={feedback} />
     </form>
   );
 }

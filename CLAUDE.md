@@ -365,8 +365,16 @@ a lista de espera funcionar.
 login, na landing e no link publico, icone do navegador (`src/app/icon.svg`). O
 rodape do relatorio segue "Gerado por Grenor", como manda a Secao 7.
 
-**Fases 9 a 12: pendentes**, nesta ordem. Proxima: Fase 9, apos o teste manual
-do rebranding.
+**Fase 9 - Producao e blindagem: concluida no codigo; deploy pendente de
+login.** CI em `.github/workflows/ci.yml` (lint, typecheck e unitarios em todo
+push e PR; integracao so quando existem os secrets `CI_*` de um projeto
+Supabase separado). Backup semanal em `backup.yml`: `pg_dump` 17 do schema
+`public`, cifrado com gpg (secrets `DIRECT_URL` e `BACKUP_PASSPHRASE`),
+artefato por 30 dias - cifrado porque o repositorio e publico. `exceljs` no
+lugar do CDN da SheetJS. O deploy no Vercel exige `vercel login` do usuario;
+`vercel.json` (regiao gru1, 2 GB e 60 s na rota do PDF) ja esta pronto.
+
+**Fases 10 a 12: pendentes**, nesta ordem.
 
 ### Comandos
 
@@ -437,8 +445,18 @@ Versoes instaladas ficaram acima do previsto na Secao 2. Diferencas que importam
   reimportar o mesmo arquivo continua nao duplicando.
 - **O preview nao e fonte de verdade.** A confirmacao da importacao reprocessa
   o arquivo guardado no Storage; o cliente nao dita quais linhas entram.
-- **`xlsx` no npm esta em 0.18.5, abandonada e com CVEs.** Usamos 0.20.3 do CDN
-  oficial do SheetJS (ver a URL em package.json). Nao troque por `npm i xlsx`.
+- **XLSX e lido pelo `exceljs` (registry npm), nao pelo SheetJS.** O `xlsx` do
+  registry parou em 0.18.5, com CVEs, e a versao boa so existia no CDN da
+  SheetJS - um tarball fora do npm que derrubava `npm ci` quando o CDN
+  falhava (Fase 9). O exceljs e assincrono, por isso `parseStatement`
+  devolve Promise; celulas viram texto (data em ISO, numero com duas casas)
+  e seguem pelas mesmas regras do CSV.
+- **Estado de `useActionState` nao atravessa componentes.** SheetPicker e
+  ColumnMapper tinham cada um o seu e descartavam o preview devolvido:
+  "Reler com esta aba" rodava a action e a tela nao mudava. O
+  `useActionState` de reprocessamento vive no painel, e os formularios
+  recebem `action` e `feedback` por props; `key` remonta o formulario quando
+  o preview troca.
 - **Regex de regra e entrada de usuario num processo compartilhado.** Todo
   padrao passa por `validatePattern` antes de ser gravado, que mede o tempo
   contra sondas adversarias. As sondas terminam com um caractere que IMPEDE o
@@ -541,6 +559,9 @@ Versoes instaladas ficaram acima do previsto na Secao 2. Diferencas que importam
 ### Estrutura
 
 ```
+.github/workflows/
+  ci.yml                              lint, typecheck e testes em push e PR
+  backup.yml                          pg_dump semanal cifrado, artefato 30 dias
 prisma/
   migrations/20260820120000_init/     schema completo
   migrations/20260820120100_rls/      RLS, revokes e policies

@@ -1,0 +1,69 @@
+# Fase 9: backup logico semanal do banco (pg_dump), guardado como artefato do
+# GitHub por 30 dias.
+#
+# O dump e CIFRADO (gpg simetrico, AES-256) antes de virar artefato: artefato
+# de repositorio publico pode ser baixado por qualquer conta do GitHub, e o
+# banco carrega dados financeiros de terceiros (LGPD). Sem a passphrase o
+# arquivo nao serve para nada.
+#
+# Secrets necessarios (Settings > Secrets and variables > Actions):
+#   DIRECT_URL         conexao direta do Supabase (porta 5432), a mesma do .env
+#   BACKUP_PASSPHRASE  frase longa e guardada fora do GitHub
+#
+# Para restaurar em um projeto novo:
+#   gpg --decrypt grenor-AAAAMMDD-HHMM.dump.gpg > banco.dump
+#   pg_restore --no-owner --no-privileges --dbname "$DIRECT_URL" banco.dump
+#
+# So o schema `public` entra: e onde vive todo dado de tenant. Os usuarios de
+# login ficam em `auth`, que o Supabase administra; recria-se pelo cadastro.
+name: Backup semanal do banco
+
+on:
+  schedule:
+    - cron: "0 3 * * 0" # domingo, 03:00 UTC = 00:00 em Brasilia
+  workflow_dispatch:
+
+jobs:
+  dump:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    env:
+      DIRECT_URL: ${{ secrets.DIRECT_URL }}
+      BACKUP_PASSPHRASE: ${{ secrets.BACKUP_PASSPHRASE }}
+    steps:
+      - name: Conferir secrets
+        run: |
+          [ -n "$DIRECT_URL" ] || { echo "::error::Defina o secret DIRECT_URL."; exit 1; }
+          [ -n "$BACKUP_PASSPHRASE" ] || { echo "::error::Defina o secret BACKUP_PASSPHRASE."; exit 1; }
+
+      # O pg_dump precisa ter a mesma versao major do servidor (Supabase esta
+      # em PostgreSQL 17); o runner traz uma versao mais antiga.
+      - name: Instalar pg_dump 17
+        run: |
+          sudo install -d /usr/share/postgresql-common/pgdg
+          curl -fsSL https://www.postgresql.org/media/keys/ACCC4CF8.asc \
+            | sudo tee /usr/share/postgresql-common/pgdg/apt.postgresql.org.asc >/dev/null
+          echo "deb [signed-by=/usr/share/postgresql-common/pgdg/apt.postgresql.org.asc] https://apt.postgresql.org/pub/repos/apt $(lsb_release -cs)-pgdg main" \
+            | sudo tee /etc/apt/sources.list.d/pgdg.list >/dev/null
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq postgresql-client-17
+          /usr/lib/postgresql/17/bin/pg_dump --version
+
+      - name: pg_dump cifrado
+        run: |
+          STAMP=$(date -u +%Y%m%d-%H%M)
+          /usr/lib/postgresql/17/bin/pg_dump "$DIRECT_URL" \
+            --schema=public --format=custom --no-owner --no-privileges \
+            --file="grenor-$STAMP.dump"
+          gpg --batch --yes --symmetric --cipher-algo AES256 \
+            --passphrase "$BACKUP_PASSPHRASE" \
+            --output "grenor-$STAMP.dump.gpg" "grenor-$STAMP.dump"
+          rm -f "grenor-$STAMP.dump"
+          ls -la grenor-*.dump.gpg
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: banco-${{ github.run_id }}
+          path: grenor-*.dump.gpg
+          retention-days: 30
+          if-no-files-found: error

@@ -29,18 +29,18 @@ const FIXTURE = join(
   "extrato-inter-com-saldo.csv",
 );
 
-const result = parseStatement(readFileSync(FIXTURE), "extrato-agosto.csv");
+const result = await parseStatement(readFileSync(FIXTURE), "extrato-agosto.csv");
 
 describe("extrato do Inter com coluna de saldo", () => {
-  it("acha a linha de titulos apesar do cabecalho de uma celula", () => {
+  it("acha a linha de titulos apesar do cabecalho de uma celula", async () => {
     expect(result.headers).toEqual(["Data", "Histórico", "Valor", "Saldo"]);
   });
 
-  it("mapeia Valor, e nao Saldo", () => {
+  it("mapeia Valor, e nao Saldo", async () => {
     expect(result.mapping?.amount).toBe(2);
   });
 
-  it("le o valor do lancamento, nao o saldo acumulado", () => {
+  it("le o valor do lancamento, nao o saldo acumulado", async () => {
     const pix = result.transactions.find((t) =>
       t.description.includes("ANA LÚCIA"),
     );
@@ -49,7 +49,7 @@ describe("extrato do Inter com coluna de saldo", () => {
     expect(pix?.amountCents).toBe(150417);
   });
 
-  it("respeita o sinal a direita", () => {
+  it("respeita o sinal a direita", async () => {
     const boleto = result.transactions.find((t) =>
       t.description.includes("MOINHO"),
     );
@@ -58,7 +58,7 @@ describe("extrato do Inter com coluna de saldo", () => {
     expect(boleto?.amountCents).toBe(-763772);
   });
 
-  it("nao importa SALDO ANTERIOR nem SALDO FINAL", () => {
+  it("nao importa SALDO ANTERIOR nem SALDO FINAL", async () => {
     const saldos = result.transactions.filter((t) =>
       /^SALDO/i.test(t.description),
     );
@@ -66,14 +66,14 @@ describe("extrato do Inter com coluna de saldo", () => {
     expect(saldos).toHaveLength(0);
   });
 
-  it("preserva acentuacao vinda de latin-1", () => {
+  it("preserva acentuacao vinda de latin-1", async () => {
     expect(result.encoding).toBe("win1252");
     expect(
       result.transactions.some((t) => t.description.includes("JOSÉ ANTÔNIO")),
     ).toBe(true);
   });
 
-  it("os lancamentos batem com o saldo do proprio extrato", () => {
+  it("os lancamentos batem com o saldo do proprio extrato", async () => {
     // Saldo anterior 50.000,00 e a soma dos movimentos precisa levar ao saldo
     // da ultima linha importada. E a conferencia que o contador faria a mao.
     const soma = result.transactions.reduce(
@@ -87,7 +87,7 @@ describe("extrato do Inter com coluna de saldo", () => {
 });
 
 describe("deteccao da coluna de saldo", () => {
-  it("descarta a coluna acumulada quando ha duas colunas de dinheiro", () => {
+  it("descarta a coluna acumulada quando ha duas colunas de dinheiro", async () => {
     const rows = [
       ["01/08/2026", "ENTRADA", "100,00", "1.100,00"],
       ["02/08/2026", "SAIDA", "-50,00", "1.050,00"],
@@ -98,7 +98,7 @@ describe("deteccao da coluna de saldo", () => {
     expect(detectMapping(null, rows)?.amount).toBe(2);
   });
 
-  it("nao se confunde quando a coluna acumulada vem antes", () => {
+  it("nao se confunde quando a coluna acumulada vem antes", async () => {
     const rows = [
       ["01/08/2026", "ENTRADA", "1.100,00", "100,00"],
       ["02/08/2026", "SAIDA", "1.050,00", "-50,00"],
@@ -109,7 +109,7 @@ describe("deteccao da coluna de saldo", () => {
     expect(detectMapping(null, rows)?.amount).toBe(3);
   });
 
-  it("mantem a primeira coluna quando nenhuma e saldo", () => {
+  it("mantem a primeira coluna quando nenhuma e saldo", async () => {
     const rows = [
       ["01/08/2026", "ENTRADA", "100,00", "7"],
       ["02/08/2026", "SAIDA", "-50,00", "3"],
@@ -126,26 +126,26 @@ describe("linhas de saldo", () => {
     "SALDO FINAL",
     "Saldo do dia",
     "SALDO EM 31/08/2026",
-  ])("descarta %s", (description) => {
+  ])("descarta %s", async (description) => {
     const csv = [
       "Data;Historico;Valor",
       "01/08/2026;PIX RECEBIDO;100,00",
       `02/08/2026;${description};5.000,00`,
     ].join("\n");
 
-    const parsed = parseStatement(Buffer.from(csv, "utf8"), "teste.csv");
+    const parsed = await parseStatement(Buffer.from(csv, "utf8"), "teste.csv");
 
     expect(parsed.transactions).toHaveLength(1);
     expect(parsed.transactions[0].description).toBe("PIX RECEBIDO");
   });
 
-  it("nao descarta lancamento que apenas menciona saldo", () => {
+  it("nao descarta lancamento que apenas menciona saldo", async () => {
     const csv = [
       "Data;Historico;Valor",
       "01/08/2026;PAGTO SALDO DEVEDOR CARTAO;-1.200,00",
     ].join("\n");
 
-    const parsed = parseStatement(Buffer.from(csv, "utf8"), "teste.csv");
+    const parsed = await parseStatement(Buffer.from(csv, "utf8"), "teste.csv");
 
     expect(parsed.transactions).toHaveLength(1);
     expect(parsed.transactions[0].amountCents).toBe(-120000);

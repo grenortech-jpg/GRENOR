@@ -31,7 +31,7 @@ let companyId: string;
 let accountId: string;
 
 async function importFile(name: string, options: { sheetName?: string } = {}) {
-  const parsed = parseStatement(fixture(name), name, options);
+  const parsed = await parseStatement(fixture(name), name, options);
 
   const batch = await prisma.importBatch.create({
     data: {
@@ -190,7 +190,7 @@ describe("repeticoes legitimas", () => {
       "05/09/2026;TARIFA PIX;-1,90",
     ].join("\n");
 
-    const parsed = parseStatement(Buffer.from(csv, "utf8"), "tarifas.csv");
+    const parsed = await parseStatement(Buffer.from(csv, "utf8"), "tarifas.csv");
     expect(parsed.transactions).toHaveLength(3);
 
     const keyed = buildDedupeKeys(accountId, parsed.transactions);
@@ -228,7 +228,7 @@ describe("repeticoes legitimas", () => {
       "05/09/2026;TARIFA PIX;-1,90",
     ].join("\n");
 
-    const parsed = parseStatement(Buffer.from(csv, "utf8"), "tarifas.csv");
+    const parsed = await parseStatement(Buffer.from(csv, "utf8"), "tarifas.csv");
     const keyed = buildDedupeKeys(accountId, parsed.transactions);
 
     const existing = await prisma.transaction.findMany({
@@ -256,7 +256,7 @@ describe("outra conta da mesma empresa", () => {
       },
     });
 
-    const parsed = parseStatement(
+    const parsed = await parseStatement(
       fixture("extrato-ofx1-latin1.ofx"),
       "extrato-ofx1-latin1.ofx",
     );
@@ -291,7 +291,7 @@ describe("Storage", () => {
     await removeStatement(path);
   }, 30_000);
 
-  it("organiza o caminho por workspace, empresa e conta", () => {
+  it("organiza o caminho por workspace, empresa e conta", async () => {
     const path = buildStoragePath({
       workspaceId: "ws",
       companyId: "co",

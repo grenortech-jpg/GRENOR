@@ -147,7 +147,7 @@ export async function uploadStatementAction(
   let batchId: string | null = null;
 
   try {
-    const parsed = parseStatement(buffer, file.name);
+    const parsed = await parseStatement(buffer, file.name);
 
     const batch = await prisma.importBatch.create({
       data: {
@@ -210,7 +210,7 @@ export async function repreviewAction(
 
   try {
     const buffer = await downloadStatement(batch.storagePath);
-    const parsed = parseStatement(buffer, batch.fileName, {
+    const parsed = await parseStatement(buffer, batch.fileName, {
       fileType: batch.fileType,
       sheetName: field(formData, "sheetName"),
       separator: field(formData, "separator"),
@@ -259,7 +259,7 @@ export async function confirmImportAction(
     // Reprocessa a partir do arquivo guardado: o preview nao e fonte de
     // verdade, e o cliente nao dita quais linhas entram.
     const buffer = await downloadStatement(batch.storagePath);
-    const parsed = parseStatement(buffer, batch.fileName, {
+    const parsed = await parseStatement(buffer, batch.fileName, {
       fileType: batch.fileType,
       sheetName: field(formData, "sheetName"),
       separator: field(formData, "separator"),
@@ -388,7 +388,9 @@ async function buildPreview(
     rows: sorted.slice(0, 200).map((row) => ({
       date: formatDate(row.date),
       description: row.description,
-      amount: formatAmount(row.amountCents),
+      // Sem sinal: a tela prefixa "−"/"+" a partir de `negative`; com o sinal
+      // do formatador junto, saida aparecia como "−-320,45".
+      amount: formatAmount(Math.abs(row.amountCents)),
       negative: row.amountCents < 0,
       duplicate: duplicateHashes.has(row.dedupeHash),
     })),

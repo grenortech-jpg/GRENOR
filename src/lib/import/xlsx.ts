@@ -1,4 +1,4 @@
-import * as XLSX from "xlsx";
+import * as ExcelJS from "exceljs";
 
 import {
   detectMapping,
@@ -14,26 +14,31 @@ import {
 /**
  * XLSX: primeira aba por padrao, com seletor de aba no preview (Secao 5.1).
  *
- * As celulas sao lidas como texto formatado (`raw: false`) para que datas e
- * valores cheguem como o usuario os ve na planilha, e daí passem pelas mesmas
- * regras de normalizacao do CSV. Datas em serial numerico continuam sendo
- * tratadas em rowsToTransactions.
+ * Le com o exceljs (registry npm, Fase 9) no lugar do SheetJS servido por CDN.
+ * As celulas viram texto e seguem pelas mesmas regras de normalizacao do CSV:
+ * datas reconhecidas pelo Excel chegam como Date e saem em ISO; numeros saem
+ * com duas casas, que e a precisao do centavo; serial de data que o Excel nao
+ * formatou como data continua sendo tratado em rowsToTransactions.
  */
-export function parseXlsx(
+export async function parseXlsx(
   buffer: Buffer,
   options: { sheetName?: string; mapping?: ColumnMapping } = {},
-): ParseResult {
-  let workbook: XLSX.WorkBook;
+): Promise<ParseResult> {
+  const workbook = new ExcelJS.Workbook();
+
+  // O exceljs tipa o parametro com o Buffer nao generico de versoes antigas do
+  // @types/node; em runtime aceita Buffer, Uint8Array ou ArrayBuffer.
+  const data = buffer as unknown as Parameters<typeof workbook.xlsx.load>[0];
 
   try {
-    workbook = XLSX.read(buffer, { type: "buffer", cellDates: false, raw: false });
+    await workbook.xlsx.load(data);
   } catch {
     throw new ParseError(
       "Não foi possível abrir a planilha. Verifique se o arquivo é um .xlsx válido.",
     );
   }
 
-  const sheetNames = workbook.SheetNames;
+  const sheetNames = workbook.worksheets.map((sheet) => sheet.name);
   if (sheetNames.length === 0) {
     throw new ParseError("A planilha não tem nenhuma aba.");
   }
@@ -43,20 +48,8 @@ export function parseXlsx(
       ? options.sheetName
       : sheetNames[0];
 
-  const sheet = workbook.Sheets[sheetName];
-
-  const raw = XLSX.utils.sheet_to_json<string[]>(sheet, {
-    header: 1,
-    raw: false,
-    defval: "",
-    blankrows: false,
-  });
-
-  const rows = raw.map((row) =>
-    (Array.isArray(row) ? row : []).map((cell) =>
-      typeof cell === "string" ? cell.trim() : String(cell ?? "").trim(),
-    ),
-  );
+  const sheet = workbook.getWorksheet(sheetName);
+  const rows = sheet ? readRows(sheet) : [];
 
   if (rows.length === 0) {
     throw new ParseError(`A aba "${sheetName}" está vazia.`);
@@ -104,6 +97,68 @@ export function parseXlsx(
     sheetNames,
     sheetName,
   };
+}
+
+/**
+ * Linhas da aba como texto, preservando a posicao das colunas (celula vazia
+ * vira "") e descartando linhas totalmente vazias.
+ */
+function readRows(sheet: ExcelJS.Worksheet): string[][] {
+  const rows: string[][] = [];
+
+  sheet.eachRow({ includeEmpty: false }, (row) => {
+    // row.values e um array de base 1: o indice 0 nao existe.
+    const values = row.values as ExcelJS.CellValue[];
+    const cells: string[] = [];
+
+    for (let column = 1; column < values.length; column += 1) {
+      cells.push(cellToText(values[column]));
+    }
+
+    if (cells.some((cell) => cell !== "")) rows.push(cells);
+  });
+
+  return rows;
+}
+
+/** Converte qualquer valor de celula do exceljs em texto normalizavel. */
+function cellToText(value: ExcelJS.CellValue): string {
+  if (value === null || value === undefined) return "";
+
+  if (value instanceof Date) return isoCivilDate(value);
+
+  if (typeof value === "number") {
+    if (!Number.isFinite(value)) return "";
+    // Duas casas: o que importa e o centavo. Inteiros (serial de data,
+    // numero de documento) ficam como estao.
+    return Number.isInteger(value) ? String(value) : value.toFixed(2);
+  }
+
+  if (typeof value === "string") return value.trim();
+  if (typeof value === "boolean") return "";
+
+  if ("richText" in value) {
+    return value.richText.map((part) => part.text).join("").trim();
+  }
+
+  if ("hyperlink" in value) {
+    return cellToText(value.text);
+  }
+
+  if ("formula" in value || "sharedFormula" in value) {
+    return cellToText(value.result ?? null);
+  }
+
+  // { error: "#N/A" } e afins.
+  return "";
+}
+
+/** O exceljs entrega datas em UTC; o dia civil vem das partes UTC. */
+function isoCivilDate(date: Date): string {
+  const year = date.getUTCFullYear();
+  const month = String(date.getUTCMonth() + 1).padStart(2, "0");
+  const day = String(date.getUTCDate()).padStart(2, "0");
+  return `${year}-${month}-${day}`;
 }
 
 function findHeaderIndex(rows: string[][], firstDataIndex: number): number {

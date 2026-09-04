@@ -2,19 +2,15 @@
 
 import { Columns3 } from "lucide-react";
 import { useState } from "react";
-import { useActionState } from "react";
 
-import {
-  repreviewAction,
-  type ImportPreview,
-  type ImportState,
+import type {
+  ImportPreview,
+  ImportState,
 } from "@/app/(app)/empresas/[id]/importar/actions";
 import { FormFeedback } from "@/components/forms/form-feedback";
 import { SubmitButton } from "@/components/forms/submit-button";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
-
-const initialState: ImportState = {};
 
 /**
  * Mapeamento manual de colunas (Secao 9).
@@ -30,12 +26,16 @@ const initialState: ImportState = {};
 export function ColumnMapper({
   preview,
   defaultOpen = false,
+  action,
+  feedback,
 }: {
   preview: ImportPreview;
   defaultOpen?: boolean;
+  /** Action de reprocessamento, cujo estado vive no painel. */
+  action: (formData: FormData) => void;
+  feedback: ImportState;
 }) {
   const [open, setOpen] = useState(defaultOpen);
-  const [state, formAction] = useActionState(repreviewAction, initialState);
   const [useSplit, setUseSplit] = useState(
     preview.mapping?.credit !== undefined || preview.mapping?.debit !== undefined,
   );
@@ -102,7 +102,7 @@ export function ColumnMapper({
             </table>
           </div>
 
-          <form action={formAction} className="space-y-4">
+          <form action={action} className="space-y-4">
             <input type="hidden" name="batchId" value={preview.batchId} />
             {preview.sheetName && (
               <input type="hidden" name="sheetName" value={preview.sheetName} />
@@ -168,7 +168,7 @@ export function ColumnMapper({
                 : "O arquivo tem colunas separadas de entrada e saída"}
             </button>
 
-            <FormFeedback state={state} />
+            <FormFeedback state={feedback} />
 
             <div className="flex gap-2">
               <SubmitButton pendingLabel="Relendo…">

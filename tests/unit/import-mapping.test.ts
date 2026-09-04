@@ -23,15 +23,15 @@ describe("planilha fora do padrao bancario", () => {
     "003;08/08/2026;Posto Ipiranga;combustivel;-210,45",
   ]);
 
-  it("expoe a amostra para o usuario escolher as colunas", () => {
-    const parsed = parseStatement(arquivo, "controle.csv");
+  it("expoe a amostra para o usuario escolher as colunas", async () => {
+    const parsed = await parseStatement(arquivo, "controle.csv");
 
     expect(parsed.sampleRows?.length).toBeGreaterThan(0);
     expect(parsed.headers).toEqual(["Ref", "Quando", "Quem", "Obs", "Quanto"]);
   });
 
-  it("importa corretamente com mapeamento manual", () => {
-    const parsed = parseStatement(arquivo, "controle.csv", {
+  it("importa corretamente com mapeamento manual", async () => {
+    const parsed = await parseStatement(arquivo, "controle.csv", {
       mapping: { date: 1, description: 2, amount: 4 },
     });
 
@@ -43,17 +43,17 @@ describe("planilha fora do padrao bancario", () => {
     expect(parsed.transactions[1].amountCents).toBe(120000);
   });
 
-  it("o mapeamento manual vence a deteccao automatica", () => {
+  it("o mapeamento manual vence a deteccao automatica", async () => {
     // Aponta a descricao para a coluna de observacao: mesmo que a deteccao
     // preferisse outra, quem manda e a escolha do usuario.
-    const parsed = parseStatement(arquivo, "controle.csv", {
+    const parsed = await parseStatement(arquivo, "controle.csv", {
       mapping: { date: 1, description: 3, amount: 4 },
     });
 
     expect(parsed.transactions[0].description).toBe("compra semanal");
   });
 
-  it("aceita colunas separadas de entrada e saida", () => {
+  it("aceita colunas separadas de entrada e saida", async () => {
     const planilha = csv([
       "Data;Historico;Recebido;Pago",
       "03/08/2026;Venda balcao;1.500,00;",
@@ -61,7 +61,7 @@ describe("planilha fora do padrao bancario", () => {
       "05/08/2026;Venda balcao;890,50;",
     ]);
 
-    const parsed = parseStatement(planilha, "caixa.csv", {
+    const parsed = await parseStatement(planilha, "caixa.csv", {
       mapping: { date: 0, description: 1, credit: 2, debit: 3 },
     });
 
@@ -71,7 +71,7 @@ describe("planilha fora do padrao bancario", () => {
     expect(parsed.transactions[2].amountCents).toBe(89050);
   });
 
-  it("ignora linhas sem data, venham de onde vierem", () => {
+  it("ignora linhas sem data, venham de onde vierem", async () => {
     const planilha = csv([
       "Relatorio de caixa - agosto",
       "Gerado por Fulano",
@@ -82,20 +82,20 @@ describe("planilha fora do padrao bancario", () => {
       "TOTAL GERAL;;60,00",
     ]);
 
-    const parsed = parseStatement(planilha, "relatorio.csv");
+    const parsed = await parseStatement(planilha, "relatorio.csv");
 
     expect(parsed.transactions).toHaveLength(2);
     expect(parsed.transactions.map((t) => t.amountCents)).toEqual([10000, -4000]);
   });
 
-  it("informa o que nao conseguiu ler, em vez de falhar em silencio", () => {
+  it("informa o que nao conseguiu ler, em vez de falhar em silencio", async () => {
     const planilha = csv([
       "Data;Historico;Valor",
       "03/08/2026;Venda;100,00",
       "04/08/2026;Linha quebrada;valor invalido",
     ]);
 
-    const parsed = parseStatement(planilha, "parcial.csv");
+    const parsed = await parseStatement(planilha, "parcial.csv");
 
     expect(parsed.transactions).toHaveLength(1);
     expect(parsed.warnings.length).toBeGreaterThan(0);

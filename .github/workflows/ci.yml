@@ -1,0 +1,65 @@
+# Fase 9: lint, typecheck e a suite Vitest em todo push e pull request.
+#
+# Dois jobs. O primeiro roda sem rede (unitarios). O segundo roda os testes de
+# isolamento multi-tenant, que exigem um banco - e SO roda quando os secrets
+# CI_* existem, apontando para um projeto Supabase separado do de producao.
+# Pull request vindo de fork nao recebe secrets, entao o passo pula sozinho.
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  verificar:
+    name: lint, typecheck e unitarios
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    env:
+      # `prisma generate` (postinstall) nao conecta; a URL so precisa existir.
+      DATABASE_URL: postgresql://ci:ci@localhost:5432/ci
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+      - run: npm ci
+      - run: npm run lint
+      - run: npm run typecheck
+      - run: npm test
+
+  integracao:
+    name: isolamento multi-tenant (banco de CI)
+    runs-on: ubuntu-latest
+    needs: verificar
+    timeout-minutes: 20
+    env:
+      HAS_DB: ${{ secrets.CI_DATABASE_URL != '' }}
+      DATABASE_URL: ${{ secrets.CI_DATABASE_URL || 'postgresql://ci:ci@localhost:5432/ci' }}
+      DIRECT_URL: ${{ secrets.CI_DIRECT_URL }}
+      NEXT_PUBLIC_SUPABASE_URL: ${{ secrets.CI_SUPABASE_URL }}
+      NEXT_PUBLIC_SUPABASE_ANON_KEY: ${{ secrets.CI_SUPABASE_ANON_KEY }}
+      SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.CI_SUPABASE_SERVICE_ROLE_KEY }}
+      AI_ENABLED: "false"
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+      - run: npm ci
+      - name: Sem banco de CI configurado
+        if: env.HAS_DB != 'true'
+        run: echo "::notice::Defina os secrets CI_DATABASE_URL e CI_DIRECT_URL (projeto Supabase de CI) para rodar os testes de isolamento."
+      - name: Migrar e semear o banco de CI
+        if: env.HAS_DB == 'true'
+        run: npm run db:deploy && npm run db:seed
+      - name: Testes de integracao
+        if: env.HAS_DB == 'true'
+        run: npm run test:db
