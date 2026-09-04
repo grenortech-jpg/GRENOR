@@ -51,7 +51,7 @@ export default async function ImportPage({
           Importar extrato
         </h1>
         <p className="mt-1 text-sm text-muted-foreground">
-          OFX, CSV ou XLSX. O Grenor identifica o formato, o separador e as
+          OFX, CSV ou XLSX. O Finort identifica o formato, o separador e as
           colunas sozinho.
         </p>
       </div>

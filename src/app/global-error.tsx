@@ -33,10 +33,10 @@ export default function GlobalError({
           background: "#ffffff",
         }}
       >
-        <title>Erro · Grenor</title>
+        <title>Erro · Finort</title>
 
         <h1 style={{ fontSize: "20px", fontWeight: 600, margin: 0 }}>
-          O Grenor não conseguiu carregar
+          O Finort não conseguiu carregar
         </h1>
         <p style={{ margin: 0, color: "#6b7280", maxWidth: "28rem" }}>
           Tente de novo em instantes. Se continuar, avise o suporte informando o

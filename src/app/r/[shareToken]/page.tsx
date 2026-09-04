@@ -10,7 +10,7 @@ import { buildReportProps } from "@/lib/reports/render";
  * Relatorio compartilhado por link (Secao 7).
  *
  * Publico e somente leitura: abre sem login, para o dono da empresa ver o
- * fechamento sem precisar de conta no Grenor.
+ * fechamento sem precisar de conta no Finort.
  *
  * Tres barreiras: o token e um UUID aleatorio, o compartilhamento precisa estar
  * ligado, e o periodo precisa estar fechado. Link de um relatorio ainda em
@@ -84,7 +84,7 @@ export default async function SharedReportPage({ params }: Params) {
           fontFamily: "Inter, system-ui, sans-serif",
         }}
       >
-        Relatório somente leitura, gerado pelo Grenor.
+        Relatório somente leitura, gerado pelo Finort by Grenor.
       </p>
     </main>
   );

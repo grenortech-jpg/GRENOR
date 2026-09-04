@@ -8,7 +8,7 @@ import { buttonVariants } from "@/components/ui/button";
 import { getCurrentUser } from "@/lib/auth/session";
 
 export const metadata: Metadata = {
-  title: "Grenor · Relatórios financeiros executivos",
+  title: "Finort · Relatórios financeiros executivos",
   description:
     "Extrato bancário em OFX, CSV ou XLSX vira DRE de caixa e relatório executivo em PDF. Feito para escritórios de contabilidade e BPOs financeiros.",
 };
@@ -54,7 +54,7 @@ export default async function HomePage() {
               O fechamento mensal que levava 5 horas passa a levar 5 minutos.
             </h1>
             <p className="mt-6 text-lg text-muted-foreground">
-              Suba o extrato bancário em OFX, CSV ou XLSX. O Grenor categoriza as
+              Suba o extrato bancário em OFX, CSV ou XLSX. O Finort categoriza as
               transações, monta a DRE de caixa do período e entrega um relatório
               em PDF com a identidade visual do seu escritório.
             </p>
@@ -95,8 +95,9 @@ export default async function HomePage() {
         </div>
       </main>
 
-      <footer className="mx-auto w-full max-w-5xl px-6 pb-10 text-sm text-muted-foreground">
-        Feito para escritórios de contabilidade e BPOs financeiros.
+      <footer className="mx-auto flex w-full max-w-5xl flex-wrap items-center justify-between gap-2 px-6 pb-10 text-sm text-muted-foreground">
+        <span>Feito para escritórios de contabilidade e BPOs financeiros.</span>
+        <span>Finort · by Grenor</span>
       </footer>
     </div>
   );

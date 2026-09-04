@@ -8,7 +8,7 @@ export default function AuthLayout({ children }: LayoutProps<"/">) {
     <div className="flex min-h-svh flex-col bg-muted/40">
       <header className="px-6 py-6">
         <Link href="/" className="inline-flex" aria-label="Início">
-          <Logo />
+          <Logo byline />
         </Link>
       </header>
 
@@ -20,7 +20,7 @@ export default function AuthLayout({ children }: LayoutProps<"/">) {
       </main>
 
       <footer className="px-6 pb-8 text-center text-xs text-muted-foreground">
-        Grenor · relatórios financeiros executivos
+        Finort · by Grenor
       </footer>
     </div>
   );

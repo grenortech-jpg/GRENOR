@@ -18,8 +18,8 @@ const geistMono = Geist_Mono({
 
 export const metadata: Metadata = {
   title: {
-    default: "Grenor",
-    template: "%s · Grenor",
+    default: "Finort",
+    template: "%s · Finort",
   },
   description:
     "Extratos bancários viram relatórios financeiros executivos em minutos.",

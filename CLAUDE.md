@@ -1,6 +1,6 @@
 @AGENTS.md
 
-# GRENOR - Especificacao Tecnica do MVP (v2)
+# FINORT (by Grenor) - Especificacao Tecnica (v3)
 
 > Documento mestre para desenvolvimento assistido por IA (Claude Code).
 > Construa o sistema fase por fase, na ordem definida na Secao 10. Nao pule fases.
@@ -10,7 +10,9 @@
 
 ## 1. Visao do Produto
 
-**Grenor** e uma plataforma SaaS que transforma extratos bancarios em relatorios financeiros executivos automaticamente.
+**Finort** e uma plataforma SaaS que transforma extratos bancarios em relatorios financeiros executivos automaticamente.
+
+**Identidade de marca:** Grenor e a EMPRESA; Finort e o PRODUTO (marca composta registravel: "Grenor Finort"). Na interface, o produto se apresenta como "Finort", com o selo "by Grenor" no login e no rodape. O simbolo do produto e a estrela polar dourada da marca. Nao renomear repositorio, pacotes ou variaveis por causa disso: o rebranding e de UI e comunicacao, nao de codigo.
 
 **Fluxo central:** o usuario sobe o extrato (OFX, CSV ou XLSX) -> o sistema categoriza as transacoes -> monta a DRE de caixa do periodo -> gera um relatorio executivo em PDF com identidade visual, graficos, comparativos e um parecer escrito por IA.
 
@@ -265,6 +267,8 @@ seus provaveis motivos com base nas categorias; 3) pontos de atencao;
 
 ## 9. Telas do MVP
 
+**Rebranding de UI (obrigatorio):** substituir o wordmark "GRENOR" da sidebar e do login pela marca do produto: estrela polar dourada + "FINORT", com "by Grenor" discreto abaixo (login) e no rodape. Titulo das paginas: "Finort". Nenhuma mudanca em nomes de codigo, pacotes ou banco.
+
 1. **Auth** - login, cadastro, recuperacao de senha.
 2. **Onboarding** - wizard: criar workspace (nome + logo) -> primeira empresa -> primeira conta (com saldo inicial e data) -> importar primeiro extrato.
 3. **Dashboard do workspace** - grid de empresas com status do mes (sem dados / em conciliacao / fechado), busca, nova empresa.
@@ -299,6 +303,18 @@ Cada fase termina com o sistema rodando e testavel. Commits pequenos e frequente
 **Fase 7 - Parecer executivo por IA:** geracao (Secao 8.2); limite de 3 regeracoes; edicao manual antes do PDF final.
 
 **Fase 8 - Polimento de lancamento:** empty/loading/error states; responsivo; seeds de demonstracao (empresa exemplo com 3 meses de dados realistas); pagina publica com lista de espera.
+
+**Fase 9 - Producao e blindagem (custo zero):** deploy no Vercel (plano Hobby) + Supabase Free; CI no GitHub Actions rodando lint, typecheck e a suite Vitest completa em todo push e pull request; substituir a dependencia `xlsx` servida pelo CDN da SheetJS por alternativa do registry npm (exceljs ou xlsx do registry), eliminando o ponto unico de falha de build; backup logico semanal do banco (pg_dump) agendado no GitHub Actions com artefato retido por 30 dias.
+
+**Fase 10 - Captacao antecipada:** pagina publica do Finort (proposta de valor, telas, video demo) com lista de espera (nome, e-mail e consentimento LGPD) gravada em tabela `Waitlist`; antecipa a parte publica da antiga v0.6.0 porque captar demanda e gratuito e nao deve esperar o produto ficar "pronto".
+
+**Fase 11 - Memoria de categorizacao em dois niveis (a melhoria tecnica mais valiosa):**
+- Nivel workspace: cache `CategorizationMemory(workspaceId, normalizedDescription, categoryId, hits)` alimentado por toda confirmacao humana; consultado ANTES das regras.
+- Nivel plataforma (global): somente CNPJ, que e dado publico: `CnpjProfile(cnpj, razaoSocial, cnaePrincipal, suggestedCategoryId)`. NUNCA compartilhar descricoes entre workspaces (podem conter dados pessoais).
+- Extracao de CNPJ por regex da propria descricao (PIX, TED, boleto) e enriquecimento do CNAE via BrasilAPI ou Minha Receita (APIs gratuitas), com cache local permanente.
+- Nova ordem de resolucao: cache do workspace -> CNPJ/CNAE global -> regras -> IA -> humano. Registrar em log a porcentagem resolvida por camada (metrica de custo).
+
+**Fase 12 - Onboarding e ingestao por e-mail:** assistente de configuracao em 4 passos + empresa de demonstracao + checklist de primeiros passos (v0.2.0); em seguida, endereco de e-mail dedicado por empresa via Cloudflare Email Workers (gratuito), reaproveitando o pipeline de importacao e deduplicacao existente, com notificacao de novos lancamentos (v0.3.0).
 
 **Fora do MVP (nao construir):** Open Finance, billing automatizado, app mobile, permissoes granulares, white-label completo, exportacao contabil (SPED e afins), filas externas.
 
@@ -344,7 +360,13 @@ o unico ativo com AI_ENABLED=false, esta funcionando).
 `20260821100000_waitlist` precisa ser aplicada (`npm run db:deploy`) antes de
 a lista de espera funcionar.
 
-Todas as fases da Secao 10 estao concluidas.
+**Rebranding de UI (Secao 9): concluido.** Wordmark FINORT com a estrela polar
+(`components/brand/logo.tsx`), titulo das paginas "Finort", selo "by Grenor" no
+login, na landing e no link publico, icone do navegador (`src/app/icon.svg`). O
+rodape do relatorio segue "Gerado por Grenor", como manda a Secao 7.
+
+**Fases 9 a 12: pendentes**, nesta ordem. Proxima: Fase 9, apos o teste manual
+do rebranding.
 
 ### Comandos
 
