@@ -16,9 +16,14 @@ import { prisma } from "@/lib/prisma";
 const SUFFIX = process.env.TEST_RUN_ID ?? "waitlist";
 const DOMAIN = `${SUFFIX}.exemplo.test`;
 
-function form(fields: Record<string, string>): FormData {
+/** FormData com a caixa de consentimento marcada, salvo pedido em contrario. */
+function form(
+  fields: Record<string, string>,
+  options: { consent?: boolean } = {},
+): FormData {
   const data = new FormData();
   for (const [key, value] of Object.entries(fields)) data.append(key, value);
+  if (options.consent !== false) data.append("consent", "on");
   return data;
 }
 
@@ -51,6 +56,22 @@ describe("inscricao", () => {
 
     expect(entry?.name).toBe("Joana");
     expect(entry?.office).toBe("Contabilidade J");
+    expect(entry?.consentAt).toBeInstanceOf(Date);
+  });
+
+  it("recusa inscricao sem o consentimento marcado, sem gravar nada", async () => {
+    const state = await joinWaitlistAction(
+      {},
+      form({ email: `sem-consentimento@${DOMAIN}` }, { consent: false }),
+    );
+
+    expect(state.error).toMatch(/aviso de privacidade/i);
+
+    const entry = await prisma.waitlistEntry.findUnique({
+      where: { email: `sem-consentimento@${DOMAIN}` },
+    });
+
+    expect(entry).toBeNull();
   });
 
   it("aceita so o e-mail", async () => {

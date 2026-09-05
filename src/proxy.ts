@@ -9,6 +9,7 @@ const PUBLIC_PREFIXES = [
   "/nova-senha",
   "/auth",
   "/r/", // relatorio compartilhado por link
+  "/privacidade", // aviso de privacidade da lista de espera
 ];
 
 /** Rotas de autenticacao das quais um usuario logado deve sair. */
@@ -86,8 +87,9 @@ export const config = {
     /*
      * Tudo, exceto arquivos estaticos, imagens otimizadas e os assets do
      * proprio Next em desenvolvimento. Rodar o proxy neles so acrescenta
-     * latencia a cada request do navegador.
+     * latencia a cada request do navegador. Video da pagina publica (webm,
+     * mp4) entra na lista: sem isso o proxy mandava /demo.webm para o login.
      */
-    "/((?!_next/static|_next/image|_next/webpack-hmr|favicon.ico|.*\\.(?:svg|png|jpg|jpeg|gif|webp|ico|css|js|map|woff2?)$).*)",
+    "/((?!_next/static|_next/image|_next/webpack-hmr|favicon.ico|.*\\.(?:svg|png|jpg|jpeg|gif|webp|ico|css|js|map|woff2?|webm|mp4)$).*)",
   ],
 };

@@ -11,7 +11,7 @@ import { Label } from "@/components/ui/label";
 const initialState: WaitlistState = {};
 
 /**
- * Lista de espera da pagina publica (Fase 8).
+ * Lista de espera da pagina publica (Fase 8; consentimento LGPD na Fase 10).
  *
  * Depois do sucesso o formulario some e da lugar a confirmacao: deixar os
  * campos preenchidos na tela convida a reenviar, e o visitante fica sem saber
@@ -82,6 +82,28 @@ export function WaitlistForm() {
           autoComplete="off"
         />
       </div>
+
+      <label className="flex items-start gap-3 text-sm text-muted-foreground">
+        <input
+          type="checkbox"
+          name="consent"
+          value="on"
+          required
+          className="mt-1 size-4 shrink-0 accent-brand"
+        />
+        <span>
+          Concordo em receber contato do Finort sobre o lançamento e li o{" "}
+          <a
+            href="/privacidade"
+            target="_blank"
+            rel="noopener"
+            className="underline underline-offset-4 hover:text-foreground"
+          >
+            aviso de privacidade
+          </a>
+          . Você pode pedir a exclusão dos seus dados a qualquer momento.
+        </span>
+      </label>
 
       <SubmitButton size="lg" className="w-full sm:w-auto" pendingLabel="Enviando…">
         Entrar na lista de espera

@@ -9,7 +9,7 @@ export type WaitlistState = {
 };
 
 /**
- * Inscricao na lista de espera (Fase 8).
+ * Inscricao na lista de espera (Fase 8; consentimento LGPD na Fase 10).
  *
  * Rota publica sem autenticacao: qualquer um na internet chega aqui. Duas
  * consequencias no codigo abaixo:
@@ -35,13 +35,16 @@ export async function joinWaitlistAction(
   if (!parsed.success) return { error: firstIssue(parsed.error) };
 
   const { email, name, office } = parsed.data;
+  // O schema ja exigiu a caixa marcada; aqui fica o instante, que e o registro
+  // do consentimento. Reinscricao renova a data.
+  const consentAt = new Date();
 
   try {
     await prisma.waitlistEntry.upsert({
       where: { email: email.toLowerCase() },
-      create: { email: email.toLowerCase(), name, office },
+      create: { email: email.toLowerCase(), name, office, consentAt },
       // Reinscricao atualiza o que veio preenchido e nao apaga o que ja havia.
-      update: { name: name ?? undefined, office: office ?? undefined },
+      update: { name: name ?? undefined, office: office ?? undefined, consentAt },
     });
   } catch (error) {
     console.error("[waitlist]", error);

@@ -333,6 +333,9 @@ model WaitlistEntry {
   name  String?
   /// Nome do escritorio ou BPO, quando informado.
   office String?
+  /// Momento em que o visitante marcou o consentimento LGPD (Fase 10).
+  /// Nulo apenas em inscricoes anteriores ao campo existir.
+  consentAt DateTime? @map("consent_at") @db.Timestamptz(6)
 
   createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
 

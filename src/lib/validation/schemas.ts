@@ -178,6 +178,11 @@ export const waitlistSchema = z.object({
     .trim()
     .max(120, "Nome do escritório muito longo (máximo 120 caracteres).")
     .optional(),
+  // Caixa marcada = "on". Consentimento e a base legal do tratamento (LGPD,
+  // art. 7, I): sem ele nada e gravado.
+  consent: z.literal("on", {
+    error: "É preciso aceitar o aviso de privacidade para entrar na lista.",
+  }),
 });
 
 export function parseWaitlist(formData: FormData) {
@@ -185,5 +190,6 @@ export function parseWaitlist(formData: FormData) {
     email: requiredField(formData, "email"),
     name: optionalField(formData, "name"),
     office: optionalField(formData, "office"),
+    consent: field(formData, "consent"),
   });
 }

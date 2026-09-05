@@ -374,7 +374,13 @@ artefato por 30 dias - cifrado porque o repositorio e publico. `exceljs` no
 lugar do CDN da SheetJS. O deploy no Vercel exige `vercel login` do usuario;
 `vercel.json` (regiao gru1, 2 GB e 60 s na rota do PDF) ja esta pronto.
 
-**Fases 10 a 12: pendentes**, nesta ordem.
+**Fase 10 - Captacao antecipada: concluida.** Pagina publica com proposta de
+valor, video-demo (`public/demo.webm`, 1,9 MB, gravado pelo Playwright na
+empresa de demonstracao), tres telas (`public/telas/`), lista de espera com
+consentimento LGPD (`consent_at`, migracao `20260904120000_waitlist_consent`)
+e aviso de privacidade em `/privacidade`.
+
+**Fases 11 e 12: pendentes**, nesta ordem.
 
 ### Comandos
 
@@ -509,6 +515,17 @@ Versoes instaladas ficaram acima do previsto na Secao 2. Diferencas que importam
   nao pertence a workspace nenhum: uma policy permissiva ali abriria a lista de
   e-mails para leitura publica. Sem policy, nenhuma linha e visivel - so o dono
   das tabelas (a aplicacao) alcanca.
+- **Telas e video da pagina publica vem SO da empresa de demonstracao**, do
+  mes de junho/2026 (o unico com a DRE inteira categorizada), com o cabecalho
+  da aplicacao oculto por CSS. O painel `/app` nunca entra: lista empresas
+  reais do workspace. Regerar: `scratchpad/assets.mjs` grava em `public/`.
+- **Consentimento LGPD e `z.literal("on")`, nao boolean.** So a caixa marcada
+  manda "on"; `consent=1` de robo nao consente com nada. A action grava
+  `consentAt` (renovado a cada reinscricao), que e o registro que a LGPD
+  pede para tratamento por consentimento.
+- **O matcher do proxy lista extensoes de arquivo estatico.** `webm` e `mp4`
+  precisaram entrar: sem isso `/demo.webm` era rota protegida e ia para o
+  login.
 - **E-mail repetido na lista responde sucesso, nao erro.** Mensagem diferente
   para endereco ja cadastrado transformaria o formulario publico num oraculo de
   "esse e-mail esta na lista?".
@@ -565,6 +582,8 @@ Versoes instaladas ficaram acima do previsto na Secao 2. Diferencas que importam
 prisma/
   migrations/20260820120000_init/     schema completo
   migrations/20260820120100_rls/      RLS, revokes e policies
+  migrations/20260821100000_waitlist/ lista de espera
+  migrations/20260904120000_waitlist_consent/ consentimento LGPD
   schema.prisma
   seed.ts                             plano de contas padrao
 src/
@@ -579,7 +598,8 @@ src/
       empresas/[id]/fechamento/       DRE, indicadores, graficos, fechamento
     api/relatorio/[periodId]/pdf/     geracao do PDF (nodejs, maxDuration 60)
     r/[shareToken]/                   relatorio publico, sem login
-    page.tsx actions.ts               landing e lista de espera
+    page.tsx actions.ts               pagina publica do Finort e lista de espera
+    privacidade/                      aviso de privacidade (LGPD)
     error.tsx global-error.tsx        fronteiras de erro
     not-found.tsx                     404 publica
       configuracoes/regras/           CRUD das regras do workspace
@@ -619,6 +639,7 @@ src/
     supabase/{server,client,admin,auth-settings}.ts
     env.ts prisma.ts site-url.ts
   proxy.ts                            renovacao de sessao + guarda de rotas
+public/telas/ public/demo.webm        telas e video da pagina publica (demo)
 scripts/demo.ts                       empresa de demonstracao (3 meses)
 tests/unit/                           sem rede
 tests/fixtures/                       OFX 1.x, OFX 2.x, CSV ; , e XLSX

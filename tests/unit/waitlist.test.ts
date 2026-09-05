@@ -7,9 +7,14 @@ import { firstIssue, parseWaitlist } from "@/lib/validation/schemas";
  * alcanca sem autenticacao. A validacao aqui e a primeira barreira.
  */
 
-function form(fields: Record<string, string>): FormData {
+/** FormData com a caixa de consentimento marcada, salvo pedido em contrario. */
+function form(
+  fields: Record<string, string>,
+  options: { consent?: boolean } = {},
+): FormData {
   const data = new FormData();
   for (const [key, value] of Object.entries(fields)) data.append(key, value);
+  if (options.consent !== false) data.append("consent", "on");
   return data;
 }
 
@@ -71,6 +76,26 @@ describe("lista de espera", () => {
       expect(parsed.data.name).toBeUndefined();
       expect(parsed.data.office).toBeUndefined();
     }
+  });
+
+  it("cobra o consentimento (Fase 10)", () => {
+    const parsed = parseWaitlist(
+      form({ email: "joana@escritorio.com.br" }, { consent: false }),
+    );
+
+    expect(parsed.success).toBe(false);
+    if (!parsed.success) {
+      expect(firstIssue(parsed.error)).toMatch(/aviso de privacidade/i);
+    }
+  });
+
+  it("so aceita a caixa marcada de verdade, nao qualquer valor", () => {
+    // Robo que envia consent=1 nao consentiu com nada.
+    const parsed = parseWaitlist(
+      form({ email: "joana@escritorio.com.br", consent: "1" }, { consent: false }),
+    );
+
+    expect(parsed.success).toBe(false);
   });
 
   it("recusa e-mail absurdamente longo", () => {
