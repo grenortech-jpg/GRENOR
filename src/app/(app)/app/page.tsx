@@ -1,10 +1,12 @@
 import type { Metadata } from "next";
 import { Building2 } from "lucide-react";
 
+import { FirstStepsChecklist } from "@/components/app/first-steps";
 import { CompanyCard } from "@/components/companies/company-card";
 import { CompanySearch } from "@/components/companies/company-search";
 import { NewCompanyDialog } from "@/components/companies/new-company-dialog";
 import { getWorkspaceOrThrow } from "@/lib/auth/workspace";
+import { getFirstSteps } from "@/lib/companies/first-steps";
 import { listCompanyOverviews } from "@/lib/companies/overview";
 import { formatMonth } from "@/lib/format";
 import { currentMonth } from "@/lib/period";
@@ -18,7 +20,10 @@ export default async function DashboardPage({ searchParams }: PageProps<"/app">)
   const search = typeof params.busca === "string" ? params.busca : "";
 
   const month = currentMonth();
-  const companies = await listCompanyOverviews(context, { search, month });
+  const [companies, firstSteps] = await Promise.all([
+    listCompanyOverviews(context, { search, month }),
+    getFirstSteps(context),
+  ]);
 
   return (
     <div className="space-y-6">
@@ -32,6 +37,8 @@ export default async function DashboardPage({ searchParams }: PageProps<"/app">)
 
         <NewCompanyDialog />
       </div>
+
+      <FirstStepsChecklist steps={firstSteps} />
 
       <CompanySearch initialValue={search} />
 

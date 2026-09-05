@@ -10,6 +10,7 @@ const PUBLIC_PREFIXES = [
   "/auth",
   "/r/", // relatorio compartilhado por link
   "/privacidade", // aviso de privacidade da lista de espera
+  "/api/inbound/", // Worker de e-mail, autenticado por segredo proprio
 ];
 
 /** Rotas de autenticacao das quais um usuario logado deve sair. */

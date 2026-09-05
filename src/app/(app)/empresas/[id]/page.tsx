@@ -5,11 +5,13 @@ import { ArrowLeft, ChevronRight, FileBarChart, ListChecks, Upload } from "lucid
 import { AccountList, type AccountView } from "@/components/accounts/account-list";
 import { CompanyStatusBadge } from "@/components/companies/company-card";
 import { CompanySettings } from "@/components/companies/company-settings";
+import { InboundEmailCard } from "@/components/companies/inbound-email-card";
 import { buttonVariants } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { canAdminister, assertCompanyInWorkspace, getWorkspaceOrThrow } from "@/lib/auth/workspace";
 import { getCompanyOverview } from "@/lib/companies/overview";
 import { listCompanyMonths } from "@/lib/companies/months";
+import { buildInboundAddress, slugify } from "@/lib/inbound/address";
 import {
   formatAmount,
   formatDate,
@@ -39,7 +41,7 @@ export default async function CompanyPage({ params }: PageProps<"/empresas/[id]"
 
   const month = currentMonth();
 
-  const [accounts, months, overview] = await Promise.all([
+  const [accounts, months, overview, emailBatches] = await Promise.all([
     prisma.bankAccount.findMany({
       where: { companyId: company.id },
       orderBy: { createdAt: "asc" },
@@ -50,7 +52,25 @@ export default async function CompanyPage({ params }: PageProps<"/empresas/[id]"
       workspaceId: context.workspace.id,
     }),
     getCompanyOverview(context, company.id, month),
+    prisma.importBatch.findMany({
+      where: { account: { companyId: company.id }, source: "EMAIL", status: "CONFIRMED" },
+      orderBy: { confirmedAt: "desc" },
+      take: 3,
+      select: { id: true, fileName: true, rowsImported: true, confirmedAt: true, senderEmail: true },
+    }),
   ]);
+
+  const inboundDomain = process.env.INBOUND_EMAIL_DOMAIN;
+  const inboundAddress = company.inboundToken
+    ? buildInboundAddress(company.inboundToken, inboundDomain)
+    : null;
+  const accountAddresses =
+    company.inboundToken && inboundDomain && accounts.length > 1
+      ? accounts.map((account) => ({
+          nickname: account.nickname,
+          address: `${company.inboundToken}+${slugify(account.nickname)}@${inboundDomain}`,
+        }))
+      : [];
 
   const accountViews: AccountView[] = accounts.map((account) => ({
     id: account.id,
@@ -141,7 +161,29 @@ export default async function CompanyPage({ params }: PageProps<"/empresas/[id]"
         </CardContent>
       </Card>
 
+      {emailBatches.length > 0 && (
+        <p className="rounded-md border border-gold/40 bg-gold/10 px-4 py-3 text-sm">
+          <span className="font-medium">Chegou por e-mail:</span>{" "}
+          {emailBatches
+            .map(
+              (batch) =>
+                `${batch.rowsImported} lançamento(s) de ${batch.fileName}${batch.confirmedAt ? ` em ${formatDate(batch.confirmedAt)}` : ""}`,
+            )
+            .join("; ")}
+          .
+        </p>
+      )}
+
       <AccountList companyId={company.id} accounts={accountViews} />
+
+      <InboundEmailCard
+        companyId={company.id}
+        enabled={company.inboundEnabled}
+        senders={company.inboundSenders}
+        address={inboundAddress}
+        accountAddresses={accountAddresses}
+        domainConfigured={Boolean(inboundDomain)}
+      />
 
       <div className="space-y-3">
         <h2 className="font-medium">Meses com movimento</h2>

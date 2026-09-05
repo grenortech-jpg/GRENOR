@@ -33,6 +33,14 @@ enum ImportFileType {
   @@map("import_file_type")
 }
 
+/// De onde veio o arquivo (Fase 12): upload na tela ou e-mail dedicado.
+enum ImportSource {
+  UPLOAD
+  EMAIL
+
+  @@map("import_source")
+}
+
 enum ImportStatus {
   PENDING
   PARSED
@@ -133,6 +141,14 @@ model Company {
   cnpj        String?
   segment     String?
   logoUrl     String?  @map("logo_url")
+
+  /// Ingestao por e-mail (Fase 12): a parte local do endereco dedicado e um
+  /// token aleatorio; nulo ate o escritorio ativar. Remetentes fora da lista
+  /// sao recusados - quem descobre o endereco nao injeta extrato.
+  inboundToken   String?  @unique @map("inbound_token")
+  inboundEnabled Boolean  @default(false) @map("inbound_enabled")
+  inboundSenders String[] @default([]) @map("inbound_senders")
+
   createdAt   DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
   updatedAt   DateTime @updatedAt @map("updated_at") @db.Timestamptz(6)
 
@@ -178,6 +194,9 @@ model ImportBatch {
   /// Caminho no Supabase Storage (bucket privado de extratos).
   storagePath    String?        @map("storage_path")
   status         ImportStatus   @default(PENDING)
+  source         ImportSource   @default(UPLOAD)
+  /// Remetente, quando o arquivo chegou por e-mail.
+  senderEmail    String?        @map("sender_email")
   rowsTotal      Int            @default(0) @map("rows_total")
   rowsImported   Int            @default(0) @map("rows_imported")
   rowsDuplicated Int            @default(0) @map("rows_duplicated")

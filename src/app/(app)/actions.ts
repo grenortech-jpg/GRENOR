@@ -21,6 +21,8 @@ import {
   parseWorkspace,
 } from "@/lib/validation/schemas";
 import { createWorkspaceForUser } from "@/lib/workspace/create";
+import { createDemoCompany } from "@/lib/demo/create";
+import { randomBytes } from "node:crypto";
 
 export type FormState = {
   error?: string;
@@ -157,6 +159,102 @@ export async function deleteCompanyAction(
 
   revalidatePath("/app");
   redirect("/app");
+}
+
+/**
+ * Empresa de demonstracao com um clique (Fase 12): a mesma Padaria do
+ * `npm run db:demo`, recriada do zero a cada chamada.
+ */
+// Nao usa estado anterior nem formulario: recebe menos parametros do que o
+// useActionState passa, o que o TypeScript aceita.
+export async function createDemoCompanyAction(): Promise<FormState> {
+  const context = await getWorkspaceOrThrow();
+
+  let companyId: string;
+  try {
+    const result = await createDemoCompany(prisma, context.workspace.id);
+    companyId = result.companyId;
+  } catch (error) {
+    console.error("[demo]", error);
+    return { error: "Não foi possível criar a empresa de demonstração agora." };
+  }
+
+  revalidatePath("/app");
+  redirect(`/empresas/${companyId}`);
+}
+
+// ---------------------------------------------------------------------------
+// Ingestao por e-mail (Fase 12)
+// ---------------------------------------------------------------------------
+
+const EMAIL = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+
+function newInboundToken(): string {
+  return randomBytes(10).toString("hex");
+}
+
+/**
+ * Ativa/desativa o endereco dedicado e define os remetentes autorizados. O
+ * token nasce na primeira ativacao e so muda em `rotateInboundTokenAction`.
+ */
+export async function updateInboundEmailAction(
+  _prevState: FormState,
+  formData: FormData,
+): Promise<FormState> {
+  const context = await getWorkspaceOrThrow();
+
+  const id = parseId(formData, "companyId");
+  if (!id.success) return { error: firstIssue(id.error) };
+  const company = await assertCompanyInWorkspace(id.data, context);
+
+  const enabled = field(formData, "enabled") === "on";
+  const senders = [
+    ...new Set(
+      (field(formData, "senders") ?? "")
+        .split(/[\n,;]+/)
+        .map((value) => value.trim().toLowerCase())
+        .filter(Boolean),
+    ),
+  ];
+
+  const invalid = senders.find((sender) => !EMAIL.test(sender));
+  if (invalid) return { error: `Remetente inválido: ${invalid}` };
+
+  if (enabled && senders.length === 0) {
+    return { error: "Informe ao menos um remetente autorizado antes de ativar." };
+  }
+
+  await prisma.company.update({
+    where: { id: company.id },
+    data: {
+      inboundEnabled: enabled,
+      inboundSenders: senders,
+      inboundToken: company.inboundToken ?? newInboundToken(),
+    },
+  });
+
+  revalidatePath(`/empresas/${company.id}`);
+  return { success: enabled ? "Endereço ativo." : "Endereço desativado." };
+}
+
+/** Troca o token: o endereco antigo deixa de existir na hora. */
+export async function rotateInboundTokenAction(
+  _prevState: FormState,
+  formData: FormData,
+): Promise<FormState> {
+  const context = await getWorkspaceOrThrow();
+
+  const id = parseId(formData, "companyId");
+  if (!id.success) return { error: firstIssue(id.error) };
+  const company = await assertCompanyInWorkspace(id.data, context);
+
+  await prisma.company.update({
+    where: { id: company.id },
+    data: { inboundToken: newInboundToken() },
+  });
+
+  revalidatePath(`/empresas/${company.id}`);
+  return { success: "Novo endereço gerado. O anterior não recebe mais nada." };
 }
 
 // ---------------------------------------------------------------------------

@@ -1,0 +1,7 @@
+name = "finort-email-worker"
+main = "worker.js"
+compatibility_date = "2026-09-01"
+
+# Segredos, nunca neste arquivo:
+#   npx wrangler secret put FINORT_INBOUND_URL
+#   npx wrangler secret put FINORT_INBOUND_SECRET

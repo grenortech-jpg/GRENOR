@@ -10,6 +10,7 @@ import {
   OnboardingSteps,
   type OnboardingStep,
 } from "@/components/onboarding/steps";
+import { DemoCompanyButton } from "@/components/companies/demo-company-button";
 import { WorkspaceForm } from "@/components/workspace/workspace-form";
 import { buttonVariants } from "@/components/ui/button";
 import {
@@ -120,23 +121,29 @@ export default async function OnboardingPage({
         </ul>
 
         <p className="text-sm text-muted-foreground">
-          O próximo passo é importar um extrato — a tela de importação chega na
-          Fase 2. Por enquanto você já pode cadastrar as demais empresas e
-          contas do escritório.
+          O próximo passo é importar o primeiro extrato. Se preferir ver o
+          produto pronto antes, crie a empresa de demonstração: três meses de
+          uma padaria fictícia, já categorizados, para fechar e gerar o
+          relatório. O checklist de primeiros passos fica no painel.
         </p>
 
-        <div className="flex flex-wrap gap-2">
-          <Link href="/app" className={buttonVariants()}>
-            Ir para o painel
-          </Link>
-          {company && (
+        <div className="flex flex-wrap items-center gap-2">
+          {company ? (
             <Link
-              href={`/empresas/${company.id}`}
-              className={buttonVariants({ variant: "outline" })}
+              href={`/empresas/${company.id}/importar`}
+              className={buttonVariants()}
             >
-              Ver {company.name}
+              Importar extrato de {company.name}
+            </Link>
+          ) : (
+            <Link href="/app" className={buttonVariants()}>
+              Ir para o painel
             </Link>
           )}
+          <DemoCompanyButton />
+          <Link href="/app" className={buttonVariants({ variant: "ghost" })}>
+            Ir para o painel
+          </Link>
         </div>
       </div>
     </OnboardingShell>
