@@ -603,6 +603,10 @@ Versoes instaladas ficaram acima do previsto na Secao 2. Diferencas que importam
   ser renomeada; o vinculo com a origem e o unico identificador estavel.
 - **404 da API de CNPJ vira cache negativo; 429, 5xx e timeout nao.** O CNPJ
   que nao existe nao vai passar a existir; a API fora do ar volta.
+- **`npm run typecheck` roda `next typegen` antes do `tsc`.** `PageProps`/`LayoutProps`
+  vivem em `.next/types`, que e gerado e nao versionado: num checkout limpo
+  (CI) o `tsc` sozinho falha com tipos inexistentes, embora passe na maquina
+  onde o `next dev` ja rodou.
 - **Depois de `prisma generate`, reinicie o `next dev`.** O client do Prisma e
   singleton em `globalThis` e sobrevive ao hot reload com o schema antigo:
   campo novo da `PrismaClientValidationError` ate o processo subir de novo.
