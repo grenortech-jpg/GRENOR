@@ -47,6 +47,10 @@ enum CategorizedBy {
   AI
   MANUAL
   NONE
+  /// Memoria do workspace (Fase 11): descricao ja confirmada por humano.
+  MEMORY
+  /// CNAE do CNPJ extraido da descricao (Fase 11).
+  CNPJ
 
   @@map("categorized_by")
 }
@@ -100,6 +104,7 @@ model Workspace {
   companies  Company[]
   categories Category[]
   rules      CategoryRule[]
+  memories   CategorizationMemory[]
 
   @@map("workspaces")
 }
@@ -246,6 +251,11 @@ model Category {
   group             CategoryGroup
   sortOrder         Int           @map("sort_order")
   isTransferNeutral Boolean       @default(false) @map("is_transfer_neutral")
+  /// Categoria padrao do sistema da qual esta foi clonada (Fase 11). Permite
+  /// que uma sugestao global (CNPJ/CNAE) aponte para "Fornecedores / CMV" em
+  /// qualquer workspace, mesmo depois de renomeada. Nulo em categoria criada
+  /// pelo proprio escritorio e nas categorias do sistema.
+  defaultId         String?       @map("default_id") @db.Uuid
   createdAt         DateTime      @default(now()) @map("created_at") @db.Timestamptz(6)
   updatedAt         DateTime      @updatedAt @map("updated_at") @db.Timestamptz(6)
 
@@ -253,8 +263,10 @@ model Category {
   transactions  Transaction[]  @relation("TransactionCategory")
   aiSuggestions Transaction[]  @relation("TransactionAiSuggestion")
   rules         CategoryRule[]
+  memories      CategorizationMemory[]
 
   @@index([workspaceId, group, sortOrder])
+  @@index([workspaceId, defaultId])
   @@map("categories")
 }
 
@@ -275,6 +287,54 @@ model CategoryRule {
 
   @@index([workspaceId, active, priority])
   @@map("category_rules")
+}
+
+/// Nivel workspace da memoria de categorizacao (Fase 11).
+///
+/// Alimentada por toda confirmacao humana e consultada ANTES das regras. A
+/// chave e a descricao normalizada sem os pedacos volateis (datas, numeros de
+/// documento), para que "PIX RECEBIDO 0106" e "PIX RECEBIDO 0206" caiam na
+/// mesma memoria. Nunca sai do workspace: descricao pode conter dado pessoal.
+model CategorizationMemory {
+  id                    String   @id @default(uuid()) @db.Uuid
+  workspaceId           String   @map("workspace_id") @db.Uuid
+  normalizedDescription String   @map("normalized_description")
+  categoryId            String   @map("category_id") @db.Uuid
+  /// Quantas confirmacoes humanas apontaram para esta categoria.
+  hits                  Int      @default(1)
+  createdAt             DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt             DateTime @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  workspace Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  category  Category  @relation(fields: [categoryId], references: [id], onDelete: Cascade)
+
+  @@unique([workspaceId, normalizedDescription])
+  @@map("categorization_memory")
+}
+
+/// Nivel plataforma da memoria (Fase 11): somente CNPJ, que e dado publico.
+///
+/// Cache permanente do que a BrasilAPI / Minha Receita devolveram. Global de
+/// proposito - o CNAE de um fornecedor e o mesmo para todo escritorio - e por
+/// isso sem workspace_id e sem policy de RLS: so a aplicacao le e grava.
+model CnpjProfile {
+  /// 14 digitos, sem pontuacao.
+  cnpj               String   @id
+  razaoSocial        String?  @map("razao_social")
+  /// Codigo do CNAE fiscal principal, 7 digitos (ex.: "4721102").
+  cnaePrincipal      String?  @map("cnae_principal")
+  cnaeDescricao      String?  @map("cnae_descricao")
+  /// Categoria padrao sugerida para SAIDAS a este CNPJ (id da categoria do
+  /// sistema). Entradas sao decididas em tempo de resolucao, pelo CNAE.
+  suggestedDefaultId String?  @map("suggested_default_id") @db.Uuid
+  /// "brasilapi" | "minhareceita" | "none"
+  source             String
+  /// A API respondeu que o CNPJ nao existe: cache negativo.
+  notFound           Boolean  @default(false) @map("not_found")
+  hits               Int      @default(0)
+  fetchedAt          DateTime @default(now()) @map("fetched_at") @db.Timestamptz(6)
+
+  @@map("cnpj_profiles")
 }
 
 // ---------------------------------------------------------------------------

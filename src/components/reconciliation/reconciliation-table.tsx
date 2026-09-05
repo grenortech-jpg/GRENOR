@@ -25,7 +25,7 @@ export type ReconcileRow = {
   negative: boolean;
   accountNickname: string;
   categoryId: string | null;
-  categorizedBy: "RULE" | "AI" | "MANUAL" | "NONE";
+  categorizedBy: "RULE" | "AI" | "MANUAL" | "NONE" | "MEMORY" | "CNPJ";
   aiConfidence: number | null;
   isTransfer: boolean;
   /** Palpite da IA abaixo do limiar, aguardando decisao do usuario. */
@@ -39,6 +39,8 @@ const ORIGIN_LABELS: Record<ReconcileRow["categorizedBy"], string> = {
   RULE: "regra",
   AI: "IA",
   MANUAL: "manual",
+  MEMORY: "memória",
+  CNPJ: "CNPJ",
   NONE: "",
 };
 
@@ -169,6 +171,7 @@ export function ReconciliationTable({
                 <td className="px-3 py-2">
                   <RuleDialog
                     companyId={companyId}
+                    transactionId={row.id}
                     monthKey={monthKey}
                     description={row.description}
                     categoryId={row.categoryId}
@@ -202,7 +205,10 @@ function RowCategory({
       <input type="hidden" name="companyId" value={companyId} />
       <input type="hidden" name="transactionIds" value={row.id} />
 
+      {/* `key` remonta o select quando a categoria muda por uma action
+          (regras, memoria, CNPJ): defaultValue sozinho nao acompanha. */}
       <select
+        key={row.categoryId ?? "none"}
         name="categoryId"
         defaultValue={row.categoryId ?? ""}
         onChange={() => formRef.current?.requestSubmit()}

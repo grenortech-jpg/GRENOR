@@ -128,6 +128,18 @@ Report
 - id, periodId, pdfUrl, shareToken (uuid), shareEnabled
 - aiSummary (text), generatedAt
 - snapshotJson (dados congelados do periodo no momento da geracao)
+
+CategorizationMemory (Fase 11, nivel workspace)
+- id, workspaceId, normalizedDescription (chave sem datas/numeros), categoryId, hits
+- unique (workspaceId, normalizedDescription); alimentada por confirmacao humana
+
+CnpjProfile (Fase 11, nivel plataforma - dado publico, sem workspace)
+- cnpj (14 digitos, PK), razaoSocial, cnaePrincipal, cnaeDescricao
+- suggestedDefaultId (categoria PADRAO para saidas), source, notFound, hits, fetchedAt
+
+Category ganha `defaultId`: a categoria do sistema da qual foi clonada. E o que
+permite uma sugestao global apontar para "Fornecedores / CMV" em qualquer
+workspace, mesmo renomeada.
 ```
 
 Indices obrigatorios: `Transaction(accountId, date)`, `Transaction(dedupeHash)` unique por conta, `Period(companyId, year, month)` unique.
@@ -380,7 +392,18 @@ empresa de demonstracao), tres telas (`public/telas/`), lista de espera com
 consentimento LGPD (`consent_at`, migracao `20260904120000_waitlist_consent`)
 e aviso de privacidade em `/privacidade`.
 
-**Fases 11 e 12: pendentes**, nesta ordem.
+**Fase 11 - Memoria de categorizacao em dois niveis: concluida.** Ordem de
+resolucao em `lib/categorization/resolve.ts`: memoria do workspace -> CNPJ/CNAE
+-> regras -> IA (acao separada) -> humano. O botao da conciliacao virou
+"Categorizar automaticamente" (`autoCategorizeAction`); `applyRulesAction` segue
+existindo para o "criar regra". Toda confirmacao humana (categorizacao manual,
+regra criada a partir de um lancamento, sugestao da IA aceita) alimenta a
+memoria. Consulta de CNPJ na BrasilAPI com fallback Minha Receita, cache
+permanente em `cnpj_profiles`, ate 30 consultas por rodada, desligavel por
+`CNPJ_LOOKUP_ENABLED=false`. Log `categorization_resolve` com a porcentagem por
+camada. Migracao `20260904130000_categorization_memory`.
+
+**Fase 12: pendente.**
 
 ### Comandos
 
@@ -549,6 +572,26 @@ Versoes instaladas ficaram acima do previsto na Secao 2. Diferencas que importam
   Prisma nao agrupa por parte de data, e a alternativa era carregar a tabela de
   lancamentos inteira so para contar. Leva o `workspace_id` na propria consulta,
   como segundo cinto da Secao 3.
+- **A chave da memoria nao e a normalizacao do dedupe.** `memoryKey` tira
+  datas, competencias e qualquer token com tres ou mais digitos, para "PIX
+  RECEBIDO 0106" e "PIX RECEBIDO 0206" caírem na mesma memoria; o dedupeHash
+  precisa continuar estavel e nao pode mudar junto.
+- **Todo candidato a CNPJ passa pelos digitos verificadores.** Numero de
+  boleto tambem tem 14 digitos; sem a validacao viraria consulta a API e
+  categoria errada.
+- **CNAE so decide ENTRADA quando a contraparte e adquirente ou banco (64/66).**
+  Receber de uma empresa qualquer nao diz se e venda ou servico; a resposta
+  certa e deixar para as regras, a IA ou o humano.
+- **Sugestao global aponta para a categoria PADRAO (`Category.defaultId`),
+  nunca para um id de workspace.** Categoria e clonada por workspace e pode
+  ser renomeada; o vinculo com a origem e o unico identificador estavel.
+- **404 da API de CNPJ vira cache negativo; 429, 5xx e timeout nao.** O CNPJ
+  que nao existe nao vai passar a existir; a API fora do ar volta.
+- **Depois de `prisma generate`, reinicie o `next dev`.** O client do Prisma e
+  singleton em `globalThis` e sobrevive ao hot reload com o schema antigo:
+  campo novo da `PrismaClientValidationError` ate o processo subir de novo.
+- **Funcao pura que o teste unitario precisa nao mora em modulo
+  `server-only`.** `parseCnpjApiResponse` vive em `cnpj-api.ts` por isso.
 - **Falha de IA e silenciosa por design** (Secao 8.1). Lote que estoura timeout
   ou devolve JSON invalido duas vezes fica sem categoria e a execucao segue nos
   demais.
@@ -566,6 +609,10 @@ Versoes instaladas ficaram acima do previsto na Secao 2. Diferencas que importam
   campo e digitavel, e o mesmo texto vai para o PDF e para `/r/[shareToken]`,
   que abre na maquina do cliente do escritorio. `summaryHtml` escapa paragrafo
   a paragrafo, com teste de regressao.
+- **O select de categoria da linha remonta por `key={row.categoryId}`.**
+  Depois de "Categorizar automaticamente", a linha voltava categorizada do
+  servidor mas o select continuava em "Sem categoria", porque `defaultValue`
+  nao acompanha a prop.
 - **Resetar campo quando a prop muda se faz com `key`, nao com efeito.** O
   ESLint (`react-hooks/set-state-in-effect`) barra `setState` dentro de
   `useEffect`; remontar o textarea por `key` faz o mesmo sem render em cascata.
@@ -584,6 +631,7 @@ prisma/
   migrations/20260820120100_rls/      RLS, revokes e policies
   migrations/20260821100000_waitlist/ lista de espera
   migrations/20260904120000_waitlist_consent/ consentimento LGPD
+  migrations/20260904130000_categorization_memory/ memoria e perfis de CNPJ
   schema.prisma
   seed.ts                             plano de contas padrao
 src/
@@ -632,6 +680,11 @@ src/
     reports/svg-charts.ts             graficos sem JavaScript
     reports/pdf.ts                    Chromium serverless / Chrome local
     reports/storage.ts                PDFs no bucket privado, URL assinada
+    categorization/                   memoria em dois niveis (Fase 11)
+      memory-key.ts cnpj.ts           chave da memoria; extracao/validacao de CNPJ
+      cnae-map.ts cnpj-api.ts         CNAE -> categoria padrao; leitura das APIs
+      cnpj-lookup.ts memory.ts        consulta com cache; alimentar/lembrar
+      resolve.ts                      ordem de resolucao e log por camada
     rules/engine.ts                   motor de regras e validacao de padrao
     transactions/transfers.ts         pares de transferencia (Secao 5.4)
     categories/list.ts                plano de contas do workspace
@@ -646,4 +699,6 @@ tests/fixtures/                       OFX 1.x, OFX 2.x, CSV ; , e XLSX
 tests/integration/                    isolamento e importacao, exigem banco
   company-months.test.ts              historico e isolamento do $queryRaw
   waitlist.test.ts                    lista de espera pela propria action
+  categorization-memory.test.ts       memoria: contagem e isolamento
+  cnpj-lookup.test.ts                 consulta real de CNPJ (pula sem rede)
 ```

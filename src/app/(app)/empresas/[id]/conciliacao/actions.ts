@@ -14,6 +14,9 @@ import { findTransferCategory, getWorkspaceCategories } from "@/lib/categories/l
 import { monthEnd, monthStart, parseMonthKey } from "@/lib/period";
 import { prisma } from "@/lib/prisma";
 import { applyRules, validatePattern } from "@/lib/rules/engine";
+import { lookupCnpjProfile } from "@/lib/categorization/cnpj-lookup";
+import { recallCategorizations, rememberCategorizations } from "@/lib/categorization/memory";
+import { logResolution, resolveCategories } from "@/lib/categorization/resolve";
 import { detectTransferPairs } from "@/lib/transactions/transfers";
 import { categorizeWithAi } from "@/lib/ai/categorize";
 import { isAiEnabled } from "@/lib/ai/client";
@@ -86,17 +89,119 @@ export async function categorizeAction(
 
   await assertCategoryInWorkspace(categoryId.data, context);
 
-  await prisma.transaction.updateMany({
-    where: { id: { in: ids.data } },
-    data: {
-      categoryId: categoryId.data,
-      categorizedBy: "MANUAL",
-      aiConfidence: null,
-    },
-  });
+  const [, corrected] = await prisma.$transaction([
+    prisma.transaction.updateMany({
+      where: { id: { in: ids.data } },
+      data: {
+        categoryId: categoryId.data,
+        categorizedBy: "MANUAL",
+        aiConfidence: null,
+      },
+    }),
+    prisma.transaction.findMany({
+      where: { id: { in: ids.data } },
+      select: { description: true },
+    }),
+  ]);
+
+  // Toda confirmacao humana alimenta a memoria do workspace (Fase 11).
+  await rememberCategorizations(
+    context.workspace.id,
+    corrected.map((row) => ({ description: row.description, categoryId: categoryId.data })),
+  );
 
   revalidateCompany(company.id);
   return { success: `${ids.data.length} lançamento(s) categorizado(s).` };
+}
+
+/**
+ * Categorizacao automatica na ordem da Fase 11: memoria do workspace ->
+ * CNPJ/CNAE -> regras. So toca no que ainda nao tem categoria; a IA e o
+ * humano ficam com o resto.
+ */
+export async function autoCategorizeAction(
+  _prevState: ReconcileState,
+  formData: FormData,
+): Promise<ReconcileState> {
+  const context = await getWorkspaceOrThrow();
+
+  const companyId = parseId(formData, "companyId");
+  if (!companyId.success) return { error: firstIssue(companyId.error) };
+  const company = await assertCompanyInWorkspace(companyId.data, context);
+
+  const month = readMonth(formData);
+
+  const [rules, categories, pending] = await Promise.all([
+    prisma.categoryRule.findMany({
+      where: { workspaceId: context.workspace.id, active: true },
+    }),
+    prisma.category.findMany({
+      where: { workspaceId: context.workspace.id },
+      select: { id: true, defaultId: true },
+    }),
+    prisma.transaction.findMany({
+      where: {
+        account: { companyId: company.id },
+        categoryId: null,
+        ...(month
+          ? { date: { gte: monthStart(month), lt: monthEnd(month) } }
+          : {}),
+      },
+      select: { id: true, description: true, amountCents: true },
+    }),
+  ]);
+
+  if (pending.length === 0) {
+    return { success: "Nada a categorizar: todos os lançamentos já têm categoria." };
+  }
+
+  const { assignments, counts } = await resolveCategories({
+    transactions: pending,
+    rules,
+    categories,
+    recall: (keys) => recallCategorizations(context.workspace.id, keys),
+    lookupCnpj: lookupCnpjProfile,
+  });
+
+  logResolution(context.workspace.id, counts);
+
+  if (assignments.length === 0) {
+    return {
+      success: `Nenhum dos ${pending.length} lançamentos pendentes foi reconhecido pela memória, por CNPJ ou pelas ${rules.length} regra(s).`,
+    };
+  }
+
+  // Um updateMany por (categoria, origem), nao um por lancamento.
+  const buckets = new Map<string, { categoryId: string; source: typeof assignments[number]["source"]; ids: string[] }>();
+  for (const assignment of assignments) {
+    const key = `${assignment.categoryId}|${assignment.source}`;
+    const bucket = buckets.get(key) ?? { categoryId: assignment.categoryId, source: assignment.source, ids: [] };
+    bucket.ids.push(assignment.transactionId);
+    buckets.set(key, bucket);
+  }
+
+  await prisma.$transaction(
+    [...buckets.values()].map((bucket) =>
+      prisma.transaction.updateMany({
+        where: { id: { in: bucket.ids } },
+        data: { categoryId: bucket.categoryId, categorizedBy: bucket.source, aiConfidence: null },
+      }),
+    ),
+  );
+
+  revalidateCompany(company.id);
+
+  const partes = [
+    counts.memory > 0 ? `${counts.memory} pela memória` : null,
+    counts.cnpj > 0 ? `${counts.cnpj} por CNPJ` : null,
+    counts.rules > 0 ? `${counts.rules} pelas regras` : null,
+  ].filter(Boolean);
+
+  return {
+    success:
+      `${assignments.length} lançamento(s) categorizado(s): ${partes.join(", ")}.` +
+      (counts.pending > 0 ? ` ${counts.pending} ainda sem categoria.` : ""),
+  };
 }
 
 /**
@@ -226,6 +331,21 @@ export async function createRuleAction(
       active: true,
     },
   });
+
+  // O lancamento corrigido (quando informado) entra na memoria: foi um humano
+  // que decidiu a categoria.
+  const corrected = readIds(formData);
+  if (corrected.length > 0) {
+    await assertTransactionsInWorkspace(corrected, context);
+    const rows = await prisma.transaction.findMany({
+      where: { id: { in: corrected } },
+      select: { description: true },
+    });
+    await rememberCategorizations(
+      context.workspace.id,
+      rows.map((row) => ({ description: row.description, categoryId: categoryId.data })),
+    );
+  }
 
   // Aplica de imediato ao que estiver pendente na empresa.
   const applyResult = await applyRulesAction({}, formData);
@@ -451,6 +571,11 @@ export async function acceptSuggestionAction(
       aiSuggestedCategoryId: null,
     },
   });
+
+  // Aceitar a sugestao e uma confirmacao humana: vai para a memoria.
+  await rememberCategorizations(context.workspace.id, [
+    { description: transaction.description, categoryId: transaction.aiSuggestedCategoryId },
+  ]);
 
   revalidateCompany(company.id);
   return { success: "Sugestão aceita." };

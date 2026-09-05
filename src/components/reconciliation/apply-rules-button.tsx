@@ -4,7 +4,7 @@ import { Zap } from "lucide-react";
 import { useActionState } from "react";
 
 import {
-  applyRulesAction,
+  autoCategorizeAction,
   type ReconcileState,
 } from "@/app/(app)/empresas/[id]/conciliacao/actions";
 import { FormFeedback } from "@/components/forms/form-feedback";
@@ -12,7 +12,10 @@ import { SubmitButton } from "@/components/forms/submit-button";
 
 const initialState: ReconcileState = {};
 
-/** Roda a camada 1 da categorizacao sobre o que ainda esta sem categoria. */
+/**
+ * Categorizacao automatica (Fase 11): memoria do workspace, CNPJ/CNAE e
+ * regras, nesta ordem, sobre o que ainda esta sem categoria.
+ */
 export function ApplyRulesButton({
   companyId,
   monthKey,
@@ -22,7 +25,7 @@ export function ApplyRulesButton({
   monthKey: string;
   pendingCount: number;
 }) {
-  const [state, formAction] = useActionState(applyRulesAction, initialState);
+  const [state, formAction] = useActionState(autoCategorizeAction, initialState);
 
   return (
     <div className="flex flex-wrap items-center gap-3">
@@ -33,10 +36,10 @@ export function ApplyRulesButton({
           variant="outline"
           size="sm"
           disabled={pendingCount === 0}
-          pendingLabel="Aplicando regras…"
+          pendingLabel="Categorizando…"
         >
           <Zap className="size-4" aria-hidden="true" />
-          Aplicar regras
+          Categorizar automaticamente
         </SubmitButton>
       </form>
 

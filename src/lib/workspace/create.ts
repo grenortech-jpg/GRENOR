@@ -41,6 +41,9 @@ export async function createWorkspaceForUser(params: {
         group: category.group,
         sortOrder: category.sortOrder,
         isTransferNeutral: category.isTransferNeutral ?? false,
+        // Vinculo com a categoria do sistema: e o que permite a sugestao
+        // global por CNPJ/CNAE apontar para a categoria certa (Fase 11).
+        defaultId: category.id,
       })),
     });
 

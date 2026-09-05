@@ -36,12 +36,15 @@ const initialState: ReconcileState = {};
 export function RuleDialog({
   companyId,
   monthKey,
+  transactionId,
   description,
   categoryId,
   categories,
 }: {
   companyId: string;
   monthKey: string;
+  /** Lancamento que originou a regra: sua correcao alimenta a memoria. */
+  transactionId: string;
   description: string;
   categoryId: string | null;
   categories: CategoryOption[];
@@ -76,6 +79,7 @@ export function RuleDialog({
         <form action={formAction} className="space-y-4">
           <input type="hidden" name="companyId" value={companyId} />
           <input type="hidden" name="mes" value={monthKey} />
+          <input type="hidden" name="transactionIds" value={transactionId} />
 
           <div className="rounded-md bg-muted px-3 py-2 text-xs text-muted-foreground">
             Lançamento de origem: <span className="font-mono">{description}</span>
