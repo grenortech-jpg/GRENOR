@@ -137,6 +137,10 @@ CnpjProfile (Fase 11, nivel plataforma - dado publico, sem workspace)
 - cnpj (14 digitos, PK), razaoSocial, cnaePrincipal, cnaeDescricao
 - suggestedDefaultId (categoria PADRAO para saidas), source, notFound, hits, fetchedAt
 
+Company ganha `inboundToken` (unique, aleatorio, trocavel), `inboundEnabled` e
+`inboundSenders` (Fase 12): endereco dedicado `<token>@dominio` para receber
+extratos por e-mail. ImportBatch ganha `source` (UPLOAD | EMAIL) e `senderEmail`.
+
 Category ganha `defaultId`: a categoria do sistema da qual foi clonada. E o que
 permite uma sugestao global apontar para "Fornecedores / CMV" em qualquer
 workspace, mesmo renomeada.
@@ -403,7 +407,19 @@ permanente em `cnpj_profiles`, ate 30 consultas por rodada, desligavel por
 `CNPJ_LOOKUP_ENABLED=false`. Log `categorization_resolve` com a porcentagem por
 camada. Migracao `20260904130000_categorization_memory`.
 
-**Fase 12: pendente.**
+**Fase 12 - Onboarding e ingestao por e-mail: concluida no codigo.**
+Empresa de demonstracao com um clique (`lib/demo/create.ts`, usada pelo
+onboarding, pelo painel e pelo `npm run db:demo`), checklist de primeiros
+passos no painel (some quando tudo esta feito), endereco de e-mail dedicado por
+empresa (`/api/inbound/email` + Email Worker do Cloudflare em
+`infra/cloudflare/email-worker/`), com lista de remetentes autorizados, token
+trocavel e aviso "chegou por e-mail" na tela da empresa. Migracao
+`20260904140000_inbound_email`.
+
+Todas as fases da Secao 10 estao concluidas no codigo. Dependem do usuario, fora
+do repositorio: `vercel login` + deploy (Fase 9); secrets `DIRECT_URL`,
+`BACKUP_PASSPHRASE` e `CI_*` no GitHub (Fase 9); dominio na Cloudflare, deploy do
+Worker e `INBOUND_EMAIL_DOMAIN`/`INBOUND_EMAIL_SECRET` (Fase 12).
 
 ### Comandos
 
@@ -592,6 +608,19 @@ Versoes instaladas ficaram acima do previsto na Secao 2. Diferencas que importam
   campo novo da `PrismaClientValidationError` ate o processo subir de novo.
 - **Funcao pura que o teste unitario precisa nao mora em modulo
   `server-only`.** `parseCnpjApiResponse` vive em `cnpj-api.ts` por isso.
+- **Rota de API publica precisa entrar em `PUBLIC_PREFIXES` do proxy.**
+  `/api/inbound/` e autenticada por segredo proprio; sem a excecao o proxy
+  redirecionava o Worker para o login e o extrato nunca chegava.
+- **O endereco de e-mail e credencial: token aleatorio + lista de remetentes.**
+  Quem descobre o endereco nao injeta extrato, porque o remetente precisa
+  estar na lista da empresa; se vazou, "gerar novo endereco" mata o antigo.
+- **Empresa com mais de uma conta exige a tag da conta no endereco**
+  (`<token>+<slug-do-apelido>@`). Adivinhar a conta importaria no lugar errado.
+- **Biblioteca usada por script tsx e por Server Action recebe o Prisma por
+  parametro** e nao importa `server-only` (`lib/demo/create.ts`).
+- **A demo e idempotente por CNPJ fixo**: apaga e recria so a empresa de
+  demonstracao; o botao do painel faz o mesmo que `npm run db:demo`. Recriar
+  descarta fechamentos e PDFs da demo anterior.
 - **Falha de IA e silenciosa por design** (Secao 8.1). Lote que estoura timeout
   ou devolve JSON invalido duas vezes fica sem categoria e a execucao segue nos
   demais.
@@ -632,6 +661,7 @@ prisma/
   migrations/20260821100000_waitlist/ lista de espera
   migrations/20260904120000_waitlist_consent/ consentimento LGPD
   migrations/20260904130000_categorization_memory/ memoria e perfis de CNPJ
+  migrations/20260904140000_inbound_email/ endereco dedicado e origem do lote
   schema.prisma
   seed.ts                             plano de contas padrao
 src/
@@ -645,6 +675,7 @@ src/
       empresas/[id]/conciliacao/      tabela do periodo, regras, transferencias
       empresas/[id]/fechamento/       DRE, indicadores, graficos, fechamento
     api/relatorio/[periodId]/pdf/     geracao do PDF (nodejs, maxDuration 60)
+    api/inbound/email/                extratos vindos do Email Worker (Fase 12)
     r/[shareToken]/                   relatorio publico, sem login
     page.tsx actions.ts               pagina publica do Finort e lista de espera
     privacidade/                      aviso de privacidade (LGPD)
@@ -680,6 +711,10 @@ src/
     reports/svg-charts.ts             graficos sem JavaScript
     reports/pdf.ts                    Chromium serverless / Chrome local
     reports/storage.ts                PDFs no bucket privado, URL assinada
+    demo/create.ts                    empresa de demonstracao (script e action)
+    inbound/address.ts                endereco dedicado: token, tag da conta, remetente
+    import/ingest.ts                  importacao sem preview (e-mail)
+    companies/first-steps.ts          checklist do painel
     categorization/                   memoria em dois niveis (Fase 11)
       memory-key.ts cnpj.ts           chave da memoria; extracao/validacao de CNPJ
       cnae-map.ts cnpj-api.ts         CNAE -> categoria padrao; leitura das APIs
@@ -693,6 +728,7 @@ src/
     env.ts prisma.ts site-url.ts
   proxy.ts                            renovacao de sessao + guarda de rotas
 public/telas/ public/demo.webm        telas e video da pagina publica (demo)
+infra/cloudflare/email-worker/        Worker que entrega anexos a /api/inbound/email
 scripts/demo.ts                       empresa de demonstracao (3 meses)
 tests/unit/                           sem rede
 tests/fixtures/                       OFX 1.x, OFX 2.x, CSV ; , e XLSX
@@ -701,4 +737,5 @@ tests/integration/                    isolamento e importacao, exigem banco
   waitlist.test.ts                    lista de espera pela propria action
   categorization-memory.test.ts       memoria: contagem e isolamento
   cnpj-lookup.test.ts                 consulta real de CNPJ (pula sem rede)
+  inbound-email.test.ts               rota de e-mail e empresa de demonstracao
 ```
